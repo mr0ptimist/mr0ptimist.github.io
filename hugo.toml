@@ -1,4 +1,4 @@
-baseURL = 'https://mroptimist.github.io/'
+baseURL = 'https://mr0ptimist.github.io/'
 languageCode = 'zh-cn'
 title = 'MrOptimist'
 theme = 'PaperMod'
