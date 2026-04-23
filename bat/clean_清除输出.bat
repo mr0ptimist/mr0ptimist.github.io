@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0"
+cd /d "%~dp0.."
 if exist public (
     rmdir /s /q public
     echo Cleaned public/

@@ -50,7 +50,9 @@ hidden = true   # 可选，私密文章
 - 可在正文 `# 标题` 开头（与 front matter title 独立），也可以不写正文标题直接从 `##` 开始
 - 代码块标注语言：` ```cpp ` ` ```ini ` ` ```bash ` 等
 - 表格用 GFM 语法
-- 图片放到 `static/` 目录，用 `/filename.png` 引用
+- 图片使用 Hugo Page Bundle 组织：文章含图片时，md 和图片放在 `content/posts/{文章名}/` 目录下（md 命名为 `index.md`），用相对路径 `![](image.webp)` 引用
+- VSCode 粘贴图片后，运行 `organize_post_images.py`（或 `bat/organize_images_整理贴图.bat`）自动整理到 Page Bundle 并压缩（PNG→WebP，>1920px 自动缩放）
+- 整理后原图保留为 `.bak` 文件，验证无误后手动删除
 - 中文与英文/数字之间加空格（排版惯例）
 - 所有 `##` 标题会自动被 JS 渲染为可折叠区块（`details/summary`），因此：
   - 不要在 `##` 前后添加额外的 `<details>` 或折叠 HTML，会冲突
@@ -74,4 +76,4 @@ hidden = true   # 可选，私密文章
 
 ## 新建文章流程
 
-推荐用项目根目录的 `new-post.py` 或 `new-post_新建文章.bat`，会自动生成带 front matter 的模板。
+推荐用项目 `bat/` 目录下的 `new-post_新建文章.bat`，或直接运行根目录的 `new-post.py`，会自动生成带 front matter 的模板。
