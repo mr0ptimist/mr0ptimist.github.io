@@ -5,7 +5,7 @@
   border-radius: 8px;
   padding: 0;
   background: var(--theme);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .post-content details.collapsible-section > summary {

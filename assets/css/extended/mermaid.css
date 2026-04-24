@@ -1,0 +1,26 @@
+/* Mermaid diagrams — override PaperMod's details overflow:clip */
+.post-content details.collapsible-section::details-content {
+  overflow: visible;
+}
+
+.post-content pre.mermaid {
+  background: transparent;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  justify-content: center;
+  padding: 1em 0;
+}
+
+.post-content pre.mermaid svg {
+  max-width: none;
+  height: auto;
+}
+
+/* Mermaid node labels: override internal 200px max-width that truncates long text */
+.post-content pre.mermaid .nodeLabel,
+.post-content pre.mermaid .nodeLabel div,
+.post-content pre.mermaid .nodeLabel p {
+  max-width: none !important;
+  white-space: normal !important;
+}
