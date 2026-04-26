@@ -1,0 +1,114 @@
+/* Image Channel Viewer - RGB/R/G/B/A channel inspection */
+.channel-container {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.channel-container img,
+.channel-container canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.channel-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 3px;
+  z-index: 12;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.channel-container:hover .channel-toolbar,
+.channel-toolbar.pinned {
+  opacity: 1;
+}
+
+.channel-btn {
+  background: rgba(0, 0, 0, 0.65);
+  color: #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: monospace;
+  cursor: pointer;
+  line-height: 1.5;
+  user-select: none;
+}
+
+.channel-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.channel-btn.active {
+  background: #4a9eff;
+  color: #fff;
+  border-color: #4a9eff;
+}
+
+/* small images: auto-arrange horizontally */
+.channel-small {
+  display: inline-block;
+  vertical-align: top;
+  margin: 0 10px 10px 0;
+}
+.channel-row {
+  display: flex;
+  width: 100%;
+  gap: 12px;
+  align-items: flex-start;
+}
+.channel-row .channel-container.channel-small {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.channel-row .channel-container.channel-small img,
+.channel-row .channel-container.channel-small canvas {
+  width: 100% !important;
+  height: auto !important;
+}
+
+/* Image metadata overlay (from sidecar JSON) */
+.channel-meta {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.channel-container:hover .channel-meta {
+  opacity: 1;
+}
+.channel-meta-inner {
+  background: rgba(0, 0, 0, 0.8);
+  color: #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-family: monospace;
+  line-height: 1.6;
+  white-space: pre;
+  max-width: 360px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+.channel-meta-inner .meta-key {
+  color: #8ab4f8;
+}
+.channel-meta-inner .meta-val {
+  color: #e8eaed;
+}
+.channel-meta-inner .meta-dim {
+  color: #9aa0a6;
+}

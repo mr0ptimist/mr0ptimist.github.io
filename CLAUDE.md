@@ -30,7 +30,15 @@ Hugo version: 0.160.1 extended.
   - Password-protected posts (`hidden: true` front matter, unlocked via nav bar)
   - Responsive width slider + TOC width slider (persisted in sessionStorage)
   - TOC auto-filtering (hides deeply nested headings, highlights active section)
-- **Custom CSS**: `assets/css/extended/collapsible.css` and `encryption.css`
+- **DDS/EXR Direct Viewer**: header parsing + pixel decode + WebGL canvas display. No preview PNGs needed — reference DDS/EXR files directly in markdown.
+  - **DDS parser**: DX10 + legacy headers, formats: RGBA8, R10G10B10A2, R8G8, R8, R16G16, R16/R16F, D32S8 (8 bytes/px, skip stencil padding), BC1/BC4/BC5 (CPU decode), BC7/BC6H (WebGL `EXT_texture_compression_bptc`). DX10 uncompressed formats MUST set `bpp` from `DXGI_BPP` table.
+  - **EXR parser**: uncompressed OpenEXR only, float32/half16 channels, Reinhard + gamma 2.2 tone map.
+  - **Web Worker**: DDS/EXR pixel decode offloaded to background thread. Transferable ArrayBuffer zero-copy. Inline worker via Blob URL. BC7/BC6H stays on main thread (needs WebGL).
+  - **IntersectionObserver**: lazy-load images within 800px of viewport. `ddsCache`/`exrCache` avoid re-decode on channel/mip switch.
+  - **Channel viewer**: R/G/B/A/RGB/RGBA buttons on each image. Canvas 2D `drawImage`+`getImageData` for pixel read (faster than WebGL round-trip). Auto-detects single-channel formats (e.g. R32_FLOAT → only "R" button).
+  - **JSON sidecar**: each DDS/EXR has a `.json` file with `renderdoc.format`, `renderdoc.mips`, `renderdoc.size`, `ai.pipeline_stage`, `ai.content`. Metadata overlay + format-aware channel auto-detection. MIP slider appears when `mips > 1`.
+  - **Format detection**: `detectFmt()` maps FourCC/DXGI to type string. DX10 → `DXGI_MAP`. Legacy → pixel-format masks. `DXGI_BPP` stores bits-per-pixel for uncompressed formats.
+- **Auto-restart**: after editing any file in this project, Claude must restart `hugo server` so changes take effect immediately
 - **Custom header**: `layouts/partials/header.html` (theme toggle, width controls, secret unlock button)
 
 ## Content Rules
@@ -42,5 +50,7 @@ Content writing guidelines are in `content/posts/CLAUDE.md`. Key points:
 - `hidden: true` makes a post password-protected
 - Reuse existing tags/categories (see `content/posts/CLAUDE.md` for lists)
 - Research articles must cite sources with links; verify all URLs are accessible before including them
-- Images use Hugo Page Bundles: post images go in `content/posts/{post-name}/` alongside `index.md`, referenced as relative paths — run `organize_post_images.py` after pasting images
+- Images use Hugo Page Bundles: post images go in `content/posts/{post-name}/` alongside `index.md`, referenced as relative paths
+  - **RenderDoc captures**: export resources as DDS/EXR, place in `images/` subdirectory alongside a JSON sidecar per resource. Reference DDS/EXR directly in markdown — browser JS decodes and displays them.
+  - **Screenshots / non-renderdoc**: save as WebP/PNG, run `organize_post_images.py` for compression + Page Bundle organization
 - All `##` headings auto-collapse via JS — don't wrap them in additional `<details>` HTML
