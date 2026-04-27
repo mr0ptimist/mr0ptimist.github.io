@@ -1,6 +1,6 @@
 import os, re, glob
 
-content_dir = os.path.join(os.path.dirname(__file__), "content", "posts")
+content_dir = os.path.join(os.path.dirname(__file__), "..", "content", "posts")
 
 def extract_front_matter(filepath):
     with open(filepath, "r", encoding="utf-8") as f:

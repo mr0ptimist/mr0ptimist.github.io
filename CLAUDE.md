@@ -11,10 +11,10 @@ Hugo static blog (https://mr0ptimist.github.io/) using the PaperMod theme as a g
 ```bash
 hugo server -D                  # Local preview (includes drafts)
 hugo                            # Build to public/
-python new-post.py              # Interactive post creation with tag/category suggestions
-python organize_post_images.py  # Organize post images into Page Bundles with compression
-python organize_post_images.py --dry-run  # Preview plan without executing
-python organize_post_images.py --post "文章名"  # Only process a specific post
+python scripts/new-post.py              # Interactive post creation with tag/category suggestions
+python scripts/organize_post_images.py  # Organize post images into Page Bundles with compression
+python scripts/organize_post_images.py --dry-run  # Preview plan without executing
+python scripts/organize_post_images.py --post "文章名"  # Only process a specific post
 ```
 
 Equivalent `.bat` files in `bat/`: `serve_启动预览.bat`, `build_构建发布.bat`, `new-post_新建文章.bat`, `clean_清除输出.bat`, `organize_images_整理贴图.bat`.

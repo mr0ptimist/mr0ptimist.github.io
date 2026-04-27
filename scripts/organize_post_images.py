@@ -2,7 +2,7 @@ import os, re, argparse, shutil
 from PIL import Image
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 POSTS_DIR = PROJECT_ROOT / "content" / "posts"
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff", ".tif"}
 MAX_WIDTH = 1920
