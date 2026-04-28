@@ -234,7 +234,13 @@
       // Wrap ArrayBuffer in typed view (ArrayBuffer[off] returns undefined!)
       var view = new Uint8Array(buf);
       if (str4(view,0) !== 'DDS ') return null;
-      var w = r32(view,16), h = r32(view,12), mips = Math.max(r32(view,28),1);
+      var w = r32(view,16), h = r32(view,12), mips, flags = r32(view,8);
+      // DDSD_MIPMAPCOUNT (0x20000): only trust header mip count when flag is set
+      if (flags & 0x20000) {
+        mips = Math.max(r32(view,28), 1);
+      } else {
+        mips = Math.floor(Math.log2(Math.max(w, h))) + 1;
+      }
       var fmt = detectFmt(view);
       var dataOff = fmt.fourCC === 'DX10' ? 148 : 128;
 
@@ -248,9 +254,12 @@
         } else {
           size = mw * mh * (fmt.bpp / 8);
         }
+        // Stop if we'd read past the buffer
+        if (mipOff + size > buf.byteLength) break;
         mipList.push({off:mipOff, size:size, w:mw, h:mh});
         mipOff += size;
       }
+      mips = mipList.length;
       return {
         w:w, h:h, mips:mips, fmt:fmt, raw: new Uint8Array(buf), mipList:mipList,
         // Decode a single mip level to RGBA8 Uint8ClampedArray
@@ -921,7 +930,8 @@ var decodeWorker = (function(){
     decode: function(type, buffer, callback) {
       var id = ++nextId;
       callbacks[id] = callback;
-      worker.postMessage({id:id, type:type, buffer:buffer}, [buffer]);
+      // Clone (not transfer) so main thread's ddsCache keeps a valid buffer for getMip()
+      worker.postMessage({id:id, type:type, buffer:buffer});
     }
   };
 })();
@@ -1100,8 +1110,26 @@ var decodeWorker = (function(){
       if (rd.format) lines.push('format: ' + rd.format);
       if (rd.size) lines.push('size: ' + rd.size);
       if (rd.mips !== undefined) lines.push('mips: ' + rd.mips);
+      // Show per-mip dimensions and compressed sizes from DDS header
+      var cachedDds = ddsCache.get(img.src);
+      if (cachedDds && cachedDds.dds && cachedDds.dds.mipList) {
+        cachedDds.dds.mipList.forEach(function(m, i) {
+          var sizeKB = (m.size / 1024).toFixed(1);
+          lines.push('  Lv' + i + ': ' + m.w + '×' + m.h + '  ' + (m.size >= 1048576 ? (m.size / 1048576).toFixed(1) + ' MB' : sizeKB + ' KB'));
+        });
+      }
       if (rd.array_size !== undefined) lines.push('array_size: ' + rd.array_size);
-      var curMipTop = data.mip === -1 ? 0 : (parseInt(data.mip) || 0);
+      // MIP level slider — if mip=-1, use actual mip count from parsed DDS header
+      var totalMips;
+      if (data.mip === -1) {
+        var cached2 = ddsCache.get(img.src);
+        totalMips = (cached2 && cached2.dds) ? cached2.dds.mips : (parseInt(rd.mips) || 1);
+      } else {
+        totalMips = parseInt(rd.mips) || 1;
+      }
+      var maxMip = Math.max(0, totalMips - 1);
+      // If exported mip level is -1 (all) or >= totalMips (invalid), default to mip 0
+      var curMipTop = (data.mip === -1 || parseInt(data.mip) >= totalMips) ? 0 : Math.max(0, Math.min(parseInt(data.mip) || 0, maxMip));
       lines.push('mip: ' + curMipTop);
       if (ai.content || ai.pipeline_stage) {
         if (ai.pipeline_stage) lines.push('[AI] stage: ' + ai.pipeline_stage);
@@ -1111,18 +1139,17 @@ var decodeWorker = (function(){
       var meta = document.createElement('div'); meta.className = 'channel-meta';
       var inner = document.createElement('div'); inner.className = 'channel-meta-inner';
       inner.textContent = lines.join('\n');
-      // MIP level slider (only for textures with mip chain)
-      var totalMips = parseInt(rd.mips) || 1;
       if (totalMips > 1) {
         var curMip = curMipTop;
         var mipRow = document.createElement('div');
-        mipRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:4px';
-        var dec = document.createElement('button'); dec.className = 'channel-btn'; dec.textContent = '-';
+        mipRow.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:4px;padding:2px 0;width:100%';
+        var mipSlider = document.createElement('input');
+        mipSlider.type = 'range'; mipSlider.min = 0; mipSlider.max = totalMips - 1; mipSlider.value = curMip;
+        mipSlider.style.cssText = 'width:60px;height:10px;cursor:pointer;accent-color:#4a9eff';
         var mipLabel = document.createElement('span');
-        mipLabel.style.cssText = 'color:#e8eaed;font-size:10px;text-align:center;min-width:40px';
-        var inc = document.createElement('button'); inc.className = 'channel-btn'; inc.textContent = '+';
+        mipLabel.style.cssText = 'color:#e8eaed;font-size:10px;min-width:32px;text-align:center';
         var setMip = function(n) {
-          curMip = n; mipLabel.textContent = curMip + '/' + (totalMips-1);
+          curMip = n; mipSlider.value = n; mipLabel.textContent = 'Lv.' + n + ' / ' + (totalMips-1);
           var cached = ddsCache.get(img.src);
           if (cached && cached.dds) {
             var px = cached.dds.getMip(n); if (!px) return;
@@ -1132,11 +1159,10 @@ var decodeWorker = (function(){
             cv.getContext('2d').putImageData(new ImageData(px, cv.width, cv.height), 0, 0);
           }
         };
-        dec.addEventListener('click', function(e) { e.stopPropagation(); if (curMip > 0) setMip(curMip - 1); });
-        inc.addEventListener('click', function(e) { e.stopPropagation(); if (curMip < totalMips - 1) setMip(curMip + 1); });
-        mipLabel.textContent = curMip + '/' + (totalMips-1);
-        mipRow.appendChild(dec); mipRow.appendChild(mipLabel); mipRow.appendChild(inc);
-        inner.appendChild(mipRow);
+        mipSlider.addEventListener('input', function(e) { e.stopPropagation(); setMip(parseInt(mipSlider.value)); });
+        mipLabel.textContent = 'Lv.' + curMip + ' / ' + (totalMips-1);
+        mipRow.appendChild(mipSlider); mipRow.appendChild(mipLabel);
+        tb.appendChild(mipRow);
       }
       meta.appendChild(inner); wrapper.appendChild(meta);
     }).catch(function(){});

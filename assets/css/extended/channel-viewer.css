@@ -18,6 +18,8 @@
   top: 8px;
   right: 8px;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 3px;
   z-index: 12;
   opacity: 0;
@@ -96,6 +98,8 @@
   border-radius: 4px;
   padding: 6px 10px;
   font-size: 11px;
+  pointer-events: auto;
+  user-select: text;
   font-family: monospace;
   line-height: 1.6;
   white-space: pre;
