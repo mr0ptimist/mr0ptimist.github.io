@@ -8,4 +8,12 @@ if "%WT_SESSION%"=="" (
 )
 
 taskkill /F /IM hugo.exe >nul 2>&1
+
+:: Auto-generate development config with project root path (for VS Code open button)
+set "ROOT_DIR=%CD:\=/%"
+if not exist "config\development" mkdir "config\development"
+(echo [params]
+echo   vscodeContentBase = '%ROOT_DIR%'
+) > "config\development\hugo.toml"
+
 hugo server -D

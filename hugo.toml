@@ -5,11 +5,13 @@ theme = 'PaperMod'
 paginate = 20
 buildFuture = true
 
+
 [params]
   description = '一个用 Hugo 搭建的博客'
   author = 'MrOptimist'
   defaultTheme = 'auto'
   ShowReadingTime = true
+  ShowWordCount = true
   ShowShareButtons = false
   ShowPostNavLinks = true
   ShowBreadCrumbs = true
