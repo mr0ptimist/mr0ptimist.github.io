@@ -24,6 +24,16 @@
 
 - **不引入 bundler**，不改成 ES module。保持 classic script + `importScripts()`。
 - **BC6H/BC7 不解码进 Worker**，依赖 WebGL context，留在主线程 `dds-parser.js`。
+- **DX10 uncompressed 格式必须从 `DXGI_BPP` 表设置 `bpp`**，漏设会导致像素读取偏移错误。
 - **`public/js/` 是 Hugo 构建输出**，不手动编辑。源码只维护 `static/js/`。
 - **Worker URL** 从 `image-viewer.js` 的 `<script src>` 推导，避免硬编码 `/js/...` 路径。
 - **`workingDir`** 通过 `window.ImageViewerConfig.workingDir` 注入（Hugo 模板渲染），静态 JS 不包含 Hugo 模板语法。
+
+## ⚠️ Worker 缓存陷阱
+
+修改 `worker-shared.js` 或 `decode-worker.js` 后，浏览器会强缓存旧版本（`importScripts()` 不随 Hugo 重启刷新）。**必须同时做两件事**：
+
+1. 更新 `image-viewer.js` 中 worker URL 的 `?v=N` 参数（+1）
+2. 更新 `decode-worker.js` 中 `importScripts(...)` 的 `?v=N` 参数（+1）
+
+然后让用户 `Ctrl+Shift+R` 硬刷新。漏掉任何一步，改动不会生效。

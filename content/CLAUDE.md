@@ -8,56 +8,30 @@ type: project
 
 ## 文章 Front Matter 格式
 
-使用 **TOML** 格式（`+++` 分隔），**不要用** YAML（`---`）格式。项目中大部分文章已统一为 TOML。
+使用 **TOML** 格式（`+++` 分隔），**不要用** YAML（`---`）格式。
 
 ```toml
 +++
-date = '2026-04-20T10:00:00+08:00'
-draft = false
+date = '2026-04-20T10:00:00+08:00'  # ISO 8601，带时区 +08:00，影响排序
+draft = false                         # true=草稿，仅 hugo serve -D 可见
 title = '文章标题'
 tags = ['标签1', '标签2']
 categories = ['分类名']
-hidden = true   # 可选，私密文章
+hidden = true                         # 可选，密码保护
 +++
 ```
 
-## 字段说明
-
-| 字段 | 必填 | 说明 |
-|------|------|------|
-| `date` | 是 | ISO 8601 格式，带时区 `+08:00`。影响文章排序 |
-| `draft` | 是 | `true`=草稿（仅 `hugo serve -D` 可见），`false`=正式发布 |
-| `title` | 是 | 文章标题，会显示在列表页和 `<title>` |
-| `tags` | 是 | 标签数组，用于 `/tags/` 页面聚合 |
-| `categories` | 是 | 分类数组，用于 `/categories/` 页面聚合 |
-| `hidden` | 否 | `true` 时文章被隐藏，需在导航栏输入密码（hugo.toml 中 `secretPassword`）后才能查看 |
-
-## 已有的分类/标签约定
-
-**categories**（选一个）：
-- `图形渲染`
-- `性能优化`
-- `博客`
-
-**tags**（按需选多个）：
-- `移动端`, `GPU`, `剔除`, `TBDR`, `NVIDIA`, `Nsight`, `UE`, `RenderDoc`, `Shader Debug`, `文档`
-
-新建文章时优先复用已有标签和分类，保持聚合页一致。
+新建时用 `new-post.py`，它会自动扫描已有文章建议标签/分类，优先复用保持聚合页一致。
 
 ## 正文规范
 
-- 正文标题用 `##` `###` 逐级递减，不要跳级
-- 可在正文 `# 标题` 开头（与 front matter title 独立），也可以不写正文标题直接从 `##` 开始
+- 标题用 `##` `###` 逐级递减，不要跳级
 - 代码块标注语言：` ```cpp ` ` ```ini ` ` ```bash ` 等
 - 表格用 GFM 语法
-- 图片使用 Hugo Page Bundle 组织：文章含图片时，md 和图片放在 `content/posts/{文章名}/` 目录下（md 命名为 `index.md`），用相对路径 `![](image.webp)` 引用
-- VSCode 粘贴图片后，运行 `organize_post_images.py`（或 `bat/organize_images_整理贴图.bat`）自动整理到 Page Bundle 并压缩（PNG→WebP，>1920px 自动缩放）
-- 整理后原图保留为 `.bak` 文件，验证无误后手动删除
-- 中文与英文/数字之间加空格（排版惯例）
-- 所有 `##` 标题会自动被 JS 渲染为可折叠区块（`details/summary`），因此：
-  - 不要在 `##` 前后添加额外的 `<details>` 或折叠 HTML，会冲突
-  - `###` 及以下标题不会被自动折叠，正常书写即可
-  - 折叠状态默认展开，用户可手动折叠并持久化到 sessionStorage
+- 所有 `##` 标题会自动被 JS 渲染为可折叠区块，**不要**在 `##` 前后添加额外的 `<details>` HTML；`###` 及以下不会折叠，正常书写
+- 图片使用 Page Bundle：文章含图片时，md 和图片放在 `content/posts/{文章名}/`（md 命名为 `index.md`），用相对路径引用
+- VSCode 粘贴图片后运行 `organize_post_images.py` 自动压缩整理（PNG→WebP，>1920px 缩放），原图保留为 `.bak` 手动确认后删除
+- 中文与英文/数字之间加空格
 
 ## 研究类文章规范
 
@@ -67,30 +41,18 @@ hidden = true   # 可选，私密文章
   - 章节末尾：用 `### 参考` 或 `### 官方文档` 列出所有来源链接
 - **严禁幻觉**：不确定的信息不写，查不到权威来源的标注"待验证"
 - 优先引用：官方文档 > 官方博客 > 论文/专利 > 知名技术博客 > 社区讨论
-- **引用网址必须验证可访问**：每个外链写入文章前必须 curl 或浏览器确认返回 200，404/超时的链接不使用，替换为可用的替代来源
+- **引用网址必须验证可访问**：每个外链写入文章前必须 curl 或浏览器确认返回 200，404/超时的链接不使用
 
 ## Mermaid 图表规范（兼容 11.x）
 
-**已通过 JS 自动修复解决**：浏览器 HTML 解析器会吞掉 `<<interface>>` 中的 `<interface>` 标签，`runMermaid()` 在 mermaid 渲染前自动修复 `&lt;<` → `&lt;&lt;` 并通过 `textContent` 写回。写 mermaid 时直接用 `<<interface>>`，无需手动转义。
+**写法规则**：
+- 直接用 `<<interface>>`，无需手动转义（JS 自动修复）
+- flowchart 节点标签含 `()` `,` `:` `@` `→` `×` `+` `=` 等**必须**用 `["..."]` 包裹，否则 Syntax error
+- 验证：`npx @mermaid-js/mermaid-cli -i file.mmd -o out.png`
 
-**仍需注意**：flowchart 未加引号的节点标签含 `()` `,` `:` `@` `→` `×` `+` `=` 等会 Syntax error，所有节点标签和 subgraph 标题一律用 `["..."]` 包裹。
+**Dark Reader 兼容**：所有 flowchart 节点必须用 `classDef` 指定 `fill` 和 `color`（mermaid 加 `!important`，Dark Reader 无法覆盖）。不要用 `<style>` 注入或 Shadow DOM。
 
-**验证**：`npx @mermaid-js/mermaid-cli -i file.mmd -o out.png`
-
-### Dark Reader 兼容
-
-Dark Reader 会覆盖 mermaid SVG 中的 fill/color，导致部分节点颜色不一致、文字变白。解决方案：
-
-1. **节点背景色**：所有 flowchart 节点必须用 `classDef` 指定 `fill` 和 `color`（mermaid 内部加 `!important`，Dark Reader 无法覆盖）
-   ```
-   classDef proc fill:#e1f5fe,color:#000
-   class A,B proc
-   ```
-2. **文字颜色**：`classDef` 的 `color:#000` 对节点内文字有效，但 subgraph 标题等非节点文字不受 `classDef` 控制。`runMermaid()` 渲染后自动对所有 `<text>` 元素执行 `style.setProperty('fill', '#000', 'important')`，inline `!important` 优先级高于 Dark Reader 注入的 stylesheet 规则
-3. **不要用 Shadow DOM**：会破坏 SVG 缩放
-4. **不要用 `<style>` 注入**：Dark Reader 仍可覆盖 SVG 内部的 stylesheet 规则
-
-**标准配色方案**（所有 flowchart 统一使用）：
+**标准配色方案**：
 
 | class | fill | 用途 |
 |-------|------|------|
@@ -103,11 +65,41 @@ Dark Reader 会覆盖 mermaid SVG 中的 fill/color，导致部分节点颜色�
 
 每个 classDef 都必须带 `color:#000`，例如 `classDef proc fill:#e1f5fe,color:#000`。
 
-## 文件命名
-
-- 用中文或英文均可，已有示例：`移动端GPU可见性剔除机制.md`、`NVIDIA_GPU_Performance_Counters_Complete_zh.md`
-- 文件名不影响 URL，URL 由 hugo.toml 的 `defaultContentLanguage` 和文件名自动生成
-
 ## 新建文章流程
 
-推荐用项目 `bat/` 目录下的 `new-post_新建文章.bat`，或直接运行根目录的 `new-post.py`，会自动生成带 front matter 的模板。
+用 `bat/new-post_新建文章.bat` 或 `python scripts/new-post.py`。所有文章统一建为 Page Bundle：
+
+```
+content/posts/{文章名}/
+  index.md        ← 正文（文件名不影响 URL，URL 由标题自动生成）
+  context.json    ← AI 参考资料索引（见下节）
+```
+
+## context.json 规范
+
+每个 Page Bundle 下都有一个 `context.json`，记录续写或修改该文章时 AI 应优先查阅的参考资料。
+
+**处理 `content/posts/` 下的文章时，若目录存在 `context.json`，必须在开始工作前先读取它。**
+
+```json
+{
+  "rdc_files": [
+    {
+      "path": "D:/Captures/nanite_cull.rdc",
+      "note": "Nanite NodeAndClusterCull 子树，EID 1189 起"
+    }
+  ],
+  "code_refs": [
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteCullRaster.cpp",
+      "note": "GPU 裁剪主逻辑，Two-Pass Occlusion 入口"
+    }
+  ],
+  "notes": "自由文本：引擎版本、抓帧条件、关键 Pass 名称等"
+}
+```
+
+- `rdc_files`：RenderDoc 抓帧文件绝对路径 + 描述
+- `code_refs`：源代码文件或目录绝对路径 + 描述
+- `notes`：自由文本补充
+- 路径为本机绝对路径，换机器失效，但文件名和 note 仍有参考价值
