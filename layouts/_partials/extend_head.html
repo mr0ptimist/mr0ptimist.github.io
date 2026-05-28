@@ -11,6 +11,11 @@
     throwOnError: false
   });"></script>
 
+{{- if .Page.Store.Get "hasGpuGraph" }}
+<script src="https://cdn.jsdelivr.net/npm/vis-network@9/standalone/umd/vis-network.min.js"></script>
+<script src="{{ "js/gpu-graph.js" | relURL }}"></script>
+{{- end }}
+
 {{- if .Page.Store.Get "hasMermaid" }}
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <script>
@@ -18,6 +23,7 @@ mermaid.initialize({
   startOnLoad: false,
   securityLevel: 'loose',
   theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+  maxEdges: 2000,
   flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis' },
   themeVariables: { fontSize: '14px' }
 });

@@ -1,0 +1,31 @@
+{{- $src    := .Get "src" -}}
+{{- $height := .Get "height" | default "520" -}}
+{{- $res    := .Page.Resources.GetMatch $src -}}
+{{- if not $res -}}
+  <p class="gpugraph-error">⚠️ 找不到图表数据文件：{{ $src }}</p>
+{{- else -}}
+{{- $data := $res | transform.Unmarshal | jsonify -}}
+<div class="gpugraph-wrap">
+  <div class="gpugraph-toolbar">
+    <span class="gpugraph-legend">
+      <span class="gpugraph-dot" style="background:#4a90d9"></span>DrawCall
+      <span class="gpugraph-dot" style="background:#5cb85c"></span>Dispatch
+      <span class="gpugraph-dot" style="background:#f0ad4e"></span>UAV
+      <span class="gpugraph-dot" style="background:#d9534f"></span>RT
+      <span class="gpugraph-dot" style="background:#9b59b6"></span>Shader
+    </span>
+    <button class="gpugraph-btn" id="ggbtn-phys-{{ .Ordinal }}"
+      onclick="GpuGraph.togglePhysics('ggraph-{{ .Ordinal }}', this)">启用物理</button>
+    <button class="gpugraph-btn"
+      onclick="GpuGraph.fit('ggraph-{{ .Ordinal }}')">自适应</button>
+    <span class="gpugraph-info" id="gginfo-{{ .Ordinal }}"></span>
+  </div>
+  <div id="ggraph-{{ .Ordinal }}" class="gpugraph-canvas" style="height:{{ $height }}px"></div>
+  <div class="gpugraph-ubiq" id="ggubiq-{{ .Ordinal }}"></div>
+</div>
+<script>
+GpuGraph.init('ggraph-{{ .Ordinal }}', 'gginfo-{{ .Ordinal }}', 'ggubiq-{{ .Ordinal }}',
+  {{ $data | safeJS }});
+</script>
+{{- .Page.Store.Set "hasGpuGraph" true -}}
+{{- end -}}
