@@ -309,3 +309,24 @@ window.ImageViewerConfig = { workingDir: "{{ hugo.WorkingDir }}" };
 })();
 </script>
 
+<script>
+function devRevealInExplorer(btn) {
+  var path = btn.getAttribute('data-abs-path');
+  var slash = path.lastIndexOf('/');
+  var dir = slash >= 0 ? path.substring(0, slash + 1) : path;
+  window.open('file:///' + dir.replace(/\\/g, '/'), '_blank');
+  navigator.clipboard.writeText(dir.replace(/\//g, '\\')).catch(function(){});
+  var orig = btn.title;
+  btn.title = '已尝试打开（路径已复制）';
+  setTimeout(function() { btn.title = orig; }, 1800);
+}
+function devCopyFilePath(btn) {
+  var path = btn.getAttribute('data-abs-path');
+  navigator.clipboard.writeText(path.replace(/\//g, '\\')).then(function() {
+    var orig = btn.title;
+    btn.title = '已复制!';
+    setTimeout(function() { btn.title = orig; }, 1500);
+  });
+}
+</script>
+
