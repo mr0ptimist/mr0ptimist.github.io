@@ -1,0 +1,5 @@
+.sort-btn.active {
+    background: var(--primary);
+    color: var(--theme);
+    border-color: var(--primary);
+}
