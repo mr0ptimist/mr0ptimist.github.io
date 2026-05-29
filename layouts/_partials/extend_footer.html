@@ -98,8 +98,33 @@
     }
   }
 
-  window.addEventListener('scroll', highlight);
-  highlight();
+  if (headings.length) {
+    window.addEventListener('scroll', highlight);
+    highlight();
+  }
+
+  // Auto-expand collapsed sections on TOC click
+  links.forEach(function(link) {
+    link.addEventListener('click', function(e) {
+      var id = decodeURIComponent(link.getAttribute('href').slice(1));
+      var target = document.getElementById(id);
+      if (!target) return;
+      var opened = false;
+      var el = target.parentElement;
+      while (el) {
+        if (el.tagName === 'DETAILS' && !el.open) { el.open = true; opened = true; }
+        el = el.parentElement;
+      }
+      if (opened) {
+        e.preventDefault();
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        });
+      }
+    });
+  });
 })();
 </script>
 
