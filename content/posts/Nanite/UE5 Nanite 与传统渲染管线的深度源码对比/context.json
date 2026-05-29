@@ -1,0 +1,91 @@
+{
+  "rdc_files": [
+    {
+      "path": "D:/Projects/UnrealProjects/TerrainDemo/Saved/RenderDocCaptures/2026.05.27-16.43.59_capture.rdc",
+      "note": "TerrainDemo Nanite VisBuffer 抓帧（VisBuffer.json 的数据来源）：MainPass(EID~1119) → BuildHZB → PostPass → EmitDepth → ShadeBinning → NaniteBasePass；场景含地形+WorldGridMaterial"
+    },
+    {
+      "path": "D:/Projects/UnrealProjects/TerrainDemo/Saved/RenderDocCaptures/2026.05.26-14.19.21_capture.rdc",
+      "note": "TerrainDemo 2026.05.26 抓帧（文章正文描述的'真实抓帧'数据来源之一）"
+    }
+  ],
+  "code_refs": [
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/DeferredShadingRenderer.cpp",
+      "note": "RenderNanite() 顶层入口(~line 1370)：InitRasterContext → DrawGeometry → EmitDepthTargets → DispatchBasePass；CullingConfig.bTwoPassOcclusion(~line 1475)"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteCullRaster.cpp",
+      "note": "CULLING_PASS_* 类型定义(line 37)；GPU Two-Pass Occlusion 裁剪主调度"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteCullRaster.h",
+      "note": "ERasterScheduling 枚举(line 25)：HardwareOnly / HardwareThenSoftware / HardwareAndSoftwareOverlap；r.Nanite.MinPixelsPerEdgeHW 阈值（默认32像素）控制路径分支"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteShading.cpp",
+      "note": "Shading 核心：FNaniteShadingPassParameters(~424)、PrepareShadingCommand PSO检查(~834)、DispatchComputeShaderBundle ShaderBundle优化(~936)、CreateNaniteShadingPassParams UAV绑定(~1096)、FShadeBinning三阶段(~1443)"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteShared.cpp",
+      "note": "FPackedView::UpdateLODScales(line 90)：每帧每视图更新 LODScale/LODScaleHW，驱动 BVH 遍历时连续 LOD 误差比较"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/SceneRendering.cpp",
+      "note": "BeginInitViews：传统渲染 CPU FrustumCull → OcclusionCull(HZB) → BuildMeshDrawCommands 全流程"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/MeshPassProcessor.cpp",
+      "note": "FReadOnlyMeshDrawSingleShaderBindings::SetShaderBindings：传统 DrawCommand 提交前绑定 UB/Texture/Sampler/SRV"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/BasePassRendering.cpp",
+      "note": "FBasePassMeshProcessor：传统 BasePass，处理所有非 Nanite MeshBatch → FMeshDrawCommand"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Engine/Private/PSOPrecacheMaterial.cpp",
+      "note": "材质 PSO 预缓存逻辑（注：文章路径误写为 Renderer/Private，实际在 Engine/Private）"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/RHI/Public/PipelineStateCache.h",
+      "note": "RHI 层 PSO 缓存接口；Nanite DispatchBasePass 通过 EPSOPrecacheResult 跳过未就绪 PSO"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Shaders/Shared/NaniteDefinitions.h",
+      "note": "NANITE_MAX_CLUSTER_TRIANGLES=128(7bit) / NANITE_MAX_CLUSTER_VERTICES=256(8bit)(line 21)；C++/Shader 共享的 Cook 时约束常量"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Shaders/Private/Nanite/NaniteDataDecode.ush",
+      "note": "FPageHeader / FCluster 数据结构(line 60)：PageBaseAddress、NumVerts、NumTris、PosStart(int3)、PosBits(位置量化精度)"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Shaders/Private/Nanite/NaniteRasterizer.ush",
+      "note": "SetupTriangle(line 28)：16.8 定点数 Half-Space 边方程建立；Barycentrics_dx/dy 梯度；bBackFace 背面判断"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Shaders/Private/Nanite/NaniteWritePixel.ush",
+      "note": "WritePixel(line 20)：ImageInterlockedMaxUInt64 在 VisBuffer64 上原子 Max，同时完成 Z-test 与 ClusterID+TriangleID 打包写入"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Shaders/Private/Nanite/NaniteShadeBinning.usf",
+      "note": "ShadingBinBuildCS(COUNT/RESERVE/SCATTER/VALIDATE)：对应 C++ FShadeBinning 三阶段；SCATTER 写入的 ShadingBinData 可在 RDC Buffer Viewer 验证"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Shaders/Private/ComputeShaderOutputCommon.ush",
+      "note": "Nanite BasePass CS 核心三函数：ShadePixel(44) 调用 FPixelShaderInOut_MainPS 复用传统 PS 逻辑；ExportPixel(113) 写 UAV OutTarget0~N；MainCS(235) Dispatch 入口"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Shaders/Private/LocalVertexFactory.ush",
+      "note": "FVertexFactoryInput(line 50)：传统顶点布局 ATTRIBUTE0(Position)~ATTRIBUTE4+(TexCoords)；VertexFactoryGetWorldPosition 进 VS"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Shaders/Private/BasePassVertexShader.usf",
+      "note": "传统 BasePass VS 入口 Main(line 32)：GetVertexFactoryIntermediates → WPO → TranslatedWorldToClip"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Shaders/Private/BasePassPixelShader.usf",
+      "note": "传统 BasePass PS 入口 MainPS：GetMaterialPixelParameters → BRDF → GBuffer SV_Target MRT 输出；FPixelShaderInOut_MainPS 被 Nanite CS 直接调用"
+    }
+  ],
+  "notes": "文章基于 UE 5.4/5.5 源码，在 UE 5.7 验证关键文件路径均存在。核心论点：Nanite 通过 VisBuffer64+ShadingBinning+CS UAV 将几何/着色/调度三层 GPU 化，材质评估代码(FPixelShaderInOut_MainPS)与传统管线完全复用。勘误：文中 PSOPrecache 文件路径写作 Renderer/Private，实际在 Engine/Source/Runtime/Engine/Private/。TerrainDemo 抓帧捕获时场景：地形(Mat_20/LandscapeMaterialInstanceConstant) + WorldGridMaterial平面，实测 MainPass ClusterCull 82组、SW Rasterize 882组、PostPass 全部遮挡跳过。"
+}
