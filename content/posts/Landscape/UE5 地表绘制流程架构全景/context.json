@@ -1,0 +1,142 @@
+{
+  "rdc_files": [],
+  "code_refs": [
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Editor/LandscapeEditor/Public/LandscapeEdMode.h",
+      "note": "FEdModeLandscape 编辑模式入口；FLandscapeToolMode / FLandscapeTargetListInfo 工具/层选择"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Editor/LandscapeEditor/Private/LandscapeEdModePaintTools.cpp",
+      "note": "FLandscapeToolStrokePaint::Apply()：笔触核心，TotalInfluenceMap 计算 + TAlphamapAccessor 读写"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Editor/LandscapeEditor/Public/LandscapeToolInterface.h",
+      "note": "FLandscapeTool / FLandscapeBrush / FLandscapeBrushData / FLandscapeBrushSet 基类定义"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Editor/LandscapeEditor/Public/LandscapeEditorObject.h",
+      "note": "ULandscapeEditorObject：BrushSize/Strength/PaintStrengthGamma 等 UPROPERTY"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Landscape/Public/LandscapeEdit.h",
+      "note": "FLandscapeEditDataInterface(SetAlphaData/SetHeightData)；FHeightmapAccessor；TAlphamapAccessor；FLandscapeTextureDataInterface Mip Lock/Unlock"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Landscape/Public/LandscapeDataAccess.h",
+      "note": "FLandscapeDataInterface：纹理到内存映射，引用计数"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Landscape/Classes/Landscape.h",
+      "note": "ALandscape / ALandscapeProxy：EditLayers、材质、LOD 设置、NaniteComponents；Proxy 模式权威源"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Landscape/Classes/LandscapeComponent.h",
+      "note": "ULandscapeComponent：HeightmapTexture / WeightmapTextures / MaterialInstances / LODScreenRatioSquared"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Landscape/Classes/LandscapeLayerInfoObject.h",
+      "note": "ULandscapeLayerInfoObject：LayerName / BlendMethod / Hardness / ThumbnailMIC"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Landscape/Classes/LandscapeEditLayer.h",
+      "note": "ULandscapeEditLayerBase：多层编辑支持（Heightmap/Weightmap/Visibility）"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Landscape/Private/LandscapeEditLayerRendererPrivate.h",
+      "note": "FLandscapeEditLayerRenderer：RDG pass，EditLayer 多层垂直混合核心；ILandscapeEditLayerRenderer UInterface"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Landscape/Private/LandscapeEditLayerMergeRenderContext.cpp",
+      "note": "FMergeRenderContext 三缓冲轮转（Write/Read/ReadPrevious）；FMergeRenderBatch / FMergeRenderStep / FEditLayerRenderItem"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Landscape/Public/LandscapeRender.h",
+      "note": "FLandscapeComponentSceneProxy(line 701)；FLandscapeRenderSystem(466)；FLandscapeSharedBuffers(358)；FLandscapeVertexFactory(226)；FLandscapeUniformShaderParameters(116)；FLandscapeBatchElementParams(161)"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Landscape/Private/LandscapeRender.cpp",
+      "note": "SceneProxy构造(1387)；CreateRenderThreadResources(1748)；LODScreenRatioSquared计算(1544-1566)；GetStaticMeshElement(2410)；DrawStaticElements(2470)；GetDynamicMeshElements(2592)；GetElementShaderBindings VS(3587)/PS(3674)"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Landscape/Classes/LandscapeMaterialInstanceConstant.h",
+      "note": "ULandscapeMaterialInstanceConstant：per-component 材质实例，绑定 weightmap 到 Shader Texture Parameter"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Shaders/Private/LandscapeVertexFactory.ush",
+      "note": "FVertexFactoryInput(line 152)；GetVertexFactoryIntermediates(637)：Heightmap采样→高度重建→LOD Morph→法线；GetLandscapeTexCoords(365)"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/SceneRendering.cpp",
+      "note": "FScene / FViewInfo 关键数据结构；InitViews 流程；FLandscapeSceneViewExtension.PreRenderViewFamily_RenderThread → ComputeSectionsLODForView → SectionLODBiasBuffer"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/DeferredShadingRenderer.cpp",
+      "note": "FDeferredShadingSceneRenderer::Render() Deferred 管线总调度"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Public/MeshPassProcessor.h",
+      "note": "FMeshPassProcessor：AddMeshBatch → BuildMeshDrawCommands；FMeshDrawCommand 生成"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/MeshDrawCommands.cpp",
+      "note": "FMeshDrawCommand 执行：排序(FCompareFMeshDrawCommands)、Dynamic Instancing、SubmitDraw"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Source/Runtime/Renderer/Private/SceneVisibility.cpp",
+      "note": "FRelevancePacket::ComputeRelevance()；FrustumCull；StaticMeshVisibilityMap 标记"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Plugins/Experimental/VirtualHeightfieldMesh/Source/VirtualHeightfieldMesh/Private/VirtualHeightfieldMeshSceneProxy.cpp",
+      "note": "FVirtualHeightfieldMeshSceneProxy：GetDynamicMeshElements(AddWork+FMeshBatch)；SubmitWork(RDG CS pipeline)；BuildOcclusionVolumes"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Plugins/Experimental/VirtualHeightfieldMesh/Source/VirtualHeightfieldMesh/Private/VirtualHeightfieldMeshVertexFactory.cpp",
+      "note": "FVirtualHeightfieldMeshIndexBuffer(line 73)：NumQuadsPerSide²×6；NullVertexStream ManualFetch(150)"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Plugins/Experimental/VirtualHeightfieldMesh/Shaders/Private/VirtualHeightfieldMesh.usf",
+      "note": "InitBuffersCS / CollectQuadsCS(持久线程四叉树遍历) / CullInstancesCS；UnPackMinMaxHeight(117)；LOD细分判断(284,309)"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Plugins/Experimental/VirtualHeightfieldMesh/Shaders/Private/VirtualHeightfieldMeshVertexFactory.ush",
+      "note": "QuadRenderInstance解包(78)；LOD Morph(LodMorphFrac=0故意关闭连续插值)；虚拟纹理精确采样 floor/ceil lerp；LodBias采样(99)"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.7/Engine/Plugins/Experimental/VirtualHeightfieldMesh/Source/VirtualHeightfieldMesh/Private/HeightfieldMinMaxTexture.cpp",
+      "note": "UHeightfieldMinMaxTexture：高度Min/Max金字塔；20次ping-pong blur生成LodBiasTexture；MaxGradient限制相邻梯度(78)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Landscape/Classes/LandscapeNaniteComponent.h",
+      "note": "ULandscapeNaniteComponent(line 82，继承 UStaticMeshComponent)；InitializeForLandscape(154)；CreateSceneProxy override(174)；UpdateMaterials(125，复制材质实例到 StaticMesh）；bEnabled/ProxyContentId/SourceLandscapeComponents"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Landscape/Private/Landscape.cpp",
+      "note": "ALandscapeProxy::UpdateNaniteRepresentation(542)；UpdateNaniteRepresentationAsync(464)；InvalidateOrUpdateNaniteRepresentation(582)——Nanite Mesh 编辑期构建入口"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteCullRaster.h",
+      "note": "IRenderer::DrawGeometry()；FRasterContext；FConfiguration；ERasterScheduling；EOutputBufferMode；EPipeline——Nanite 光栅化管道接口"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteShared.h",
+      "note": "FNaniteRasterPipeline(538)：bDisplacementEnabled(547) 等 14 个 bool flags；FNaniteRasterPipelines(716)；FNaniteShadingPipeline(801)；FNaniteShadingPipelines(883)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteVisibility.h",
+      "note": "FNaniteVisibilityResults：IsRasterBinVisible(18)/IsShadingBinVisible(19)；FNaniteVisibility：BeginVisibilityQuery(121)——GPU 两级剔除（Instance→Cluster BVH）"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Shaders/Private/Nanite/NaniteDataDecode.ush",
+      "note": "UnpackVisPixel(861)——VisBuffer 格式：低32位(.x) = [31]bIsImposter|[30..7]VisibleClusterIndex|[6..0]TriIndex；高32位(.y) = DepthInt"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Shaders/Private/Nanite/NaniteShadeBinning.usf",
+      "note": "ShadeBinning 三 Pass：COUNT→RESERVE→SCATTER；SHADING_BIN_TILE_SIZE = 8 or 32（由 BINNING_TECHNIQUE 决定）；像素按 ShadingBin 分组供后续求值"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/RenderCore/Private/RenderUtils.cpp",
+      "note": "UseNaniteTessellation(1370)：r.Nanite.Tessellation && r.Nanite.ProgrammableRaster && r.Nanite.ComputeRasterization 三者全非零才返回 true"
+    }
+  ],
+  "notes": "文章覆盖标准 UE Landscape 三层流水线（编辑层→数据层→渲染层）全流程，含 ALandscapeProxy/ALandscapeStreamingProxy 世界分区架构、FMergeRenderContext 三缓冲 EditLayer 合并、SceneProxy Phase 0-8 渲染流程（含 SharedBuffersKey、LODScreenRatioSquared、GetStaticMeshElement NumPrimitives 公式、DrawStaticElements batch 计数）、VHFM CS-driven GPU pipeline（CollectQuadsCS→CullInstancesCS→DrawIndexedIndirect）、HeightfieldMinMaxTexture 三张辅助纹理、Nanite Landscape 章节（UpdateNaniteRepresentation 编辑期构建→Nanite::FSceneProxy 注册→GPU Instance/Cluster BVH 两级剔除→VisBuffer 双路径光栅化→ShadeBinning 三 Pass→DecodeVisBuffer+材质求值）、以及 UE Deferred/Mobile 管线与 Unity URP 的详细对比。VHFM 源码在 Engine/Plugins/Experimental/VirtualHeightfieldMesh/ 而非 Runtime/。Nanite 相关源码在 D:/BuildUnrealEngine（非 C:/Program Files 路径）。Nanite Displacement 开关是 r.Nanite.Tessellation（非 r.Nanite.Displacement，该 CVar 不存在）。"
+}
