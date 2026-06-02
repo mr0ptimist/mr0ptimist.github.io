@@ -1,0 +1,8 @@
+{
+  "project": {
+    "prompt": "先阅读 CLAUDE.md、content/CLAUDE.md、layouts/ 下的关键模板、assets/css/extended/ 了解这个 Hugo 博客项目，然后待命等我告诉你需要改什么。"
+  },
+  "article": {
+    "prompt": "先通读 {article_rel}/index.md 和 context.json，了解这篇文章的内容和上下文，然后待命等我提问。"
+  }
+}
