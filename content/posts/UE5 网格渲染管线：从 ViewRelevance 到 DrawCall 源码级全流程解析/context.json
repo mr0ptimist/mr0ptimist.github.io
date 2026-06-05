@@ -1,0 +1,81 @@
+{
+  "code_refs": [
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/SceneVisibility.cpp",
+      "note": "可见性管线核心：FrustumCull/OcclusionCull/ComputeRelevance/GDME/SetupMeshPasses 全流程，约 5680 行"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/SceneVisibilityPrivate.h",
+      "note": "FVisibilityTaskData/FVisibilityViewPacket/FRelevancePacket/TCommandPipe 私有类定义"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/SceneVisibility.h",
+      "note": "IVisibilityTaskData 接口、FViewCommands 结构定义"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Public/MeshPassProcessor.h",
+      "note": "EMeshPass 枚举 (39 种)、FMeshDrawCommand 类、FMeshPassProcessor 基类、FMeshPassMask 位掩码"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/MeshPassProcessor.cpp",
+      "note": "SubmitDrawBegin/End、SubmitMeshDrawCommandsRange、FMeshDrawCommand::SubmitDraw 实现"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Public/MeshPassProcessor.inl",
+      "note": "BuildMeshDrawCommands() 模板方法实现 — FMeshBatch→FMeshDrawCommand 核心逻辑"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/MeshDrawCommands.h",
+      "note": "FParallelMeshDrawCommandPass 类声明、FMeshDrawCommandPassSetupTaskContext"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/MeshDrawCommands.cpp",
+      "note": "GenerateDynamicMeshDrawCommands、DispatchPassSetup、Dispatch/Draw、BuildRenderingCommands"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Engine/Public/PrimitiveViewRelevance.h",
+      "note": "FPrimitiveViewRelevance 结构体定义，继承 FMaterialRelevance，含 20+ View 级标志位"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Engine/Public/Materials/MaterialRelevance.h",
+      "note": "FMaterialRelevance 结构体，64-bit 位域含 30+ 材质级标志位"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Engine/Public/PrimitiveSceneProxy.h",
+      "note": "GetViewRelevance()/GetDynamicMeshElements()/DrawStaticElements() 虚函数声明"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Engine/Private/StaticMeshSceneProxy.cpp",
+      "note": "FStaticMeshSceneProxy::DrawStaticElements() (L1382) — 静态网格收集入口；GetViewRelevance() (L2372)；GetDynamicMeshElements() (L1669)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Engine/Private/SkeletalMeshSceneProxy.cpp",
+      "note": "FSkeletalMeshSceneProxy::GetViewRelevance() (L1271) 和 GetDynamicMeshElements() (L555)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Engine/Private/Rendering/NaniteResources.cpp",
+      "note": "Nanite::FSceneProxy::GetViewRelevance() (L1152) — 始终 bStaticRelevance=true"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/PrimitiveSceneInfo.cpp",
+      "note": "CacheMeshDrawCommands() (L583) — 静态 MDC 预构建；AddStaticMeshes() (L1537)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/SceneRendering.cpp",
+      "note": "SetupMeshPass() 循环 (L4747) — 遍历 EMeshPass::Num 分发各 Pass；FViewInfo::CreateMeshPass()"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/DeferredShadingRenderer.cpp",
+      "note": "FDeferredShadingSceneRenderer::Render() — 主渲染入口；RenderNanite() (L1370)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Engine/Public/MeshBatch.h",
+      "note": "FMeshBatch (L370) 和 FMeshBatchElement (L231) 结构体定义"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/InstanceCulling/InstanceCullingContext.cpp",
+      "note": "FInstanceCullingContext::SubmitDrawCommands() (L1673) — GPU Scene 间接绘制提交"
+    }
+  ],
+  "notes": "引擎版本 UE 5.5 (D:/BuildUnrealEngine)。分析基于 Swarm 12 个 Agent 并行扫描上述源码后汇总。覆盖传统网格渲染管线从 GetViewRelevance 到 RHI DrawIndexedPrimitive 的全流程，不涉及 Nanite GPU 端剔除和光栅化的内部细节。"
+}
