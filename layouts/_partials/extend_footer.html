@@ -335,41 +335,36 @@ window.ImageViewerConfig = { workingDir: "{{ hugo.WorkingDir }}" };
 </script>
 
 <script>
-function devRevealInExplorer(btn) {
-  var path = btn.getAttribute('data-abs-path');
-  var slash = path.lastIndexOf('/');
-  var dir = slash >= 0 ? path.substring(0, slash + 1) : path;
-  var dirFixed = dir.replace(/\\/g, '/');
-  // winfs: opaque URI (like mailto:) avoids // authority parsing that strips D: colon
-  window.open('winfs:' + encodeURI(dirFixed), '_blank');
-  navigator.clipboard.writeText(dir.replace(/\//g, '\\')).catch(function(){});
-  var orig = btn.title;
-  btn.title = '正在打开资源管理器...';
-  setTimeout(function() { btn.title = orig; }, 2000);
-}
-function devCopyFilePath(btn) {
-  var path = btn.getAttribute('data-abs-path');
-  navigator.clipboard.writeText(path.replace(/\//g, '\\')).then(function() {
-    var orig = btn.title;
-    btn.title = '已复制!';
-    setTimeout(function() { btn.title = orig; }, 1500);
-  });
-}
-function devLaunchClaude(btn) {
-  var root = btn.getAttribute('data-root-path').replace(/\\/g, '/');
-  // cc: opaque URI → local PS script → Start-Process pwsh + claude
-  window.open('cc:' + root, '_blank');
-  var orig = btn.title;
-  btn.title = '正在启动 Claude Code...';
-  setTimeout(function() { btn.title = orig; }, 2000);
-}
-function devLaunchClaudeArticle(btn) {
-  var path = btn.getAttribute('data-abs-path').replace(/\\/g, '/');
-  // cca: opaque URI → local PS script → reads article + context.json
-  window.open('cca:' + path, '_blank');
-  var orig = btn.title;
-  btn.title = '正在启动 Claude Code（文章上下文）...';
-  setTimeout(function() { btn.title = orig; }, 2000);
+function devAction(btn) {
+  var action = btn.getAttribute('data-dev-action');
+  var path   = (btn.getAttribute('data-dev-path') || '').replace(/\\/g, '/');
+  var scheme = '', label = '';
+
+  switch (action) {
+    case 'explore-dir':
+      var slash = path.lastIndexOf('/');
+      path = slash >= 0 ? path.substring(0, slash + 1) : path;
+      scheme = 'winfs'; label = '正在打开资源管理器...'; break;
+    case 'explore-file':
+      scheme = 'winfs'; label = '正在打开资源管理器...'; break;
+    case 'copy-path':
+      navigator.clipboard.writeText(path.replace(/\//g, '\\')).then(function() {
+        var orig = btn.title; btn.title = '已复制!';
+        setTimeout(function() { btn.title = orig; }, 1500);
+      });
+      return;
+    case 'claude':
+      scheme = 'cc'; label = '正在启动 Claude Code...'; break;
+    case 'claude-article':
+      scheme = 'cca'; label = '正在启动 Claude Code（文章上下文）...'; break;
+  }
+
+  if (scheme) window.open(scheme + ':' + encodeURI(path), '_blank');
+  navigator.clipboard.writeText(path.replace(/\//g, '\\')).catch(function(){});
+  if (label) {
+    var orig = btn.title; btn.title = label;
+    setTimeout(function() { btn.title = orig; }, 2000);
+  }
 }
 </script>
 

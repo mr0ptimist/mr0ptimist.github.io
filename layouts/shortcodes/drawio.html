@@ -1,0 +1,95 @@
+{{- $src    := .Get "src" -}}
+{{- $ratio  := .Get "ratio" | default "3/1" -}}
+{{- $height := .Get "height" -}}
+{{- $res    := .Page.Resources.GetMatch $src -}}
+{{- if not $res -}}
+<p class="drawio-error">⚠️ 找不到图表文件：<code>{{ $src }}</code></p>
+{{- else -}}
+{{- $b64 := $res.Content | base64Encode -}}
+{{- $uid := .Ordinal -}}
+{{- $dim := printf "aspect-ratio:%s;height:auto;" $ratio | safeCSS -}}
+{{- if $height -}}
+  {{- $dim = printf "height:%spx;" $height | safeCSS -}}
+{{- end -}}
+<div class="drawio-wrap" id="drawio-wrap-{{ $uid }}"
+  style="width:100%;max-width:100%;min-width:280px;min-height:180px;max-height:95vh;resize:both;overflow:hidden;{{ $dim }}margin:1.5em 0;">
+  <iframe id="drawio-frame-{{ $uid }}"
+    src="about:blank"
+    style="width:100%;height:100%;border:0;"
+    loading="lazy"
+    title="drawio diagram"></iframe>
+  <noscript>
+    <div style="padding:2em;text-align:center;color:#64748b;">
+      <p>📐 此图表需要 JavaScript 才能交互查看。</p>
+      <p><a href="https://app.diagrams.net/?lightbox=1" target="_blank" rel="noopener">在 draw.io 中打开</a></p>
+    </div>
+  </noscript>
+</div>
+<script>
+(function() {
+  var uid = '{{ $uid }}';
+  var binary = atob('{{ $b64 }}');
+  var bytes = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
+  var xml = new TextDecoder('utf-8').decode(bytes);
+  xml = xml.replace(/\bpage="1"/g, 'page="0"');
+  xml = xml.replace(/<mxGraphModel\b/, '<mxGraphModel background="none"');
+
+  // Detect dark mode from page theme
+  var htmlTheme = document.documentElement.dataset.theme;
+  var isDark = htmlTheme === 'dark';
+  var baseUrl = 'https://embed.diagrams.net/?embed=1&ui=min&chrome=0&proto=json';
+  if (isDark) baseUrl += '&dark=1';
+
+  // Parse content bounds, set container aspect-ratio + border color dynamically
+  (function() {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(xml, 'text/xml');
+    var geos = doc.querySelectorAll('mxGeometry');
+    if (!geos.length) return;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var j = 0; j < geos.length; j++) {
+      var g = geos[j];
+      var x = parseFloat(g.getAttribute('x'));
+      var y = parseFloat(g.getAttribute('y'));
+      var w = parseFloat(g.getAttribute('width'));
+      var h = parseFloat(g.getAttribute('height'));
+      if (isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h) || !w || !h) continue;
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + w);   maxY = Math.max(maxY, y + h);
+    }
+    if (!isFinite(minX)) return;
+    var bw = maxX - minX + 16, bh = maxY - minY + 16;
+    var wrap = document.getElementById('drawio-wrap-' + uid);
+    if (wrap && bw > 0 && bh > 0) {
+      wrap.style.border = isDark ? '1px solid #333' : '1px solid #e5e7eb';
+      wrap.style.borderRadius = '8px';
+    }
+  })();
+
+  var iframe = document.getElementById('drawio-frame-' + uid);
+  if (!iframe) return;
+
+  // Set src after theme detection
+  iframe.src = baseUrl;
+
+  function post() {
+    iframe.contentWindow.postMessage(JSON.stringify({ action: 'load', xml: xml, autosave: 0 }), '*');
+    setTimeout(function() {
+      iframe.contentWindow.postMessage(JSON.stringify({ action: 'fitWindow' }), '*');
+    }, 800);
+  }
+
+  var loaded = false;
+  window.addEventListener('message', function(evt) {
+    var msg;
+    try { msg = JSON.parse(evt.data); } catch(e) { return; }
+    if (msg.event === 'init') {
+      if (!loaded) { loaded = true; post(); }
+    }
+  });
+
+  iframe.addEventListener('load', function() { post(); });
+})();
+</script>
+{{- end -}}

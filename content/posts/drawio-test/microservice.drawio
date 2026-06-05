@@ -1,0 +1,65 @@
+<mxfile host="app.diagrams.net" version="24.0.0">
+  <diagram id="d1" name="Page-1">
+    <mxGraphModel dx="1426" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="2" parent="1" style="fillColor=#f8fafc;fontSize=14;fontStyle=1;rounded=1;strokeColor=#cbd5e1;verticalAlign=top;" value="微服务架构概览" vertex="1">
+          <mxGeometry height="540" width="740" x="20" y="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="3" parent="1" style="arcSize=12;fillColor=#e0f2fe;html=1;rounded=1;shadow=0;spacing=8;strokeColor=#475569;strokeWidth=1.5;whiteSpace=wrap;" value="&lt;b&gt;API Gateway&lt;/b&gt;&lt;br&gt;统一入口 / 路由鉴权" vertex="1">
+          <mxGeometry height="70" width="120" x="60" y="245" as="geometry"/>
+        </mxCell>
+        <mxCell id="4" parent="1" style="arcSize=12;fillColor=#ede9fe;html=1;rounded=1;shadow=0;spacing=8;strokeColor=#475569;strokeWidth=1.5;whiteSpace=wrap;" value="&lt;b&gt;User Service&lt;/b&gt;&lt;br&gt;用户服务" vertex="1">
+          <mxGeometry height="55" width="120" x="280" y="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="5" parent="1" style="arcSize=12;fillColor=#ede9fe;html=1;rounded=1;shadow=0;spacing=8;strokeColor=#475569;strokeWidth=1.5;whiteSpace=wrap;" value="&lt;b&gt;Order Service&lt;/b&gt;&lt;br&gt;订单服务" vertex="1">
+          <mxGeometry height="55" width="120" x="280" y="190" as="geometry"/>
+        </mxCell>
+        <mxCell id="6" parent="1" style="arcSize=12;fillColor=#ede9fe;html=1;rounded=1;shadow=0;spacing=8;strokeColor=#475569;strokeWidth=1.5;whiteSpace=wrap;" value="&lt;b&gt;Payment Service&lt;/b&gt;&lt;br&gt;支付服务" vertex="1">
+          <mxGeometry height="55" width="120" x="280" y="315" as="geometry"/>
+        </mxCell>
+        <mxCell id="7" parent="1" style="arcSize=12;fillColor=#dcfce7;html=1;rounded=1;shadow=0;spacing=8;strokeColor=#475569;strokeWidth=1.5;whiteSpace=wrap;" value="&lt;b&gt;PostgreSQL&lt;/b&gt;&lt;br&gt;主数据库" vertex="1">
+          <mxGeometry height="55" width="120" x="540" y="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="8" parent="1" style="arcSize=12;fillColor=#ffe4e6;html=1;rounded=1;shadow=0;spacing=8;strokeColor=#475569;strokeWidth=1.5;whiteSpace=wrap;" value="&lt;b&gt;Redis&lt;/b&gt;&lt;br&gt;缓存 / 会话" vertex="1">
+          <mxGeometry height="55" width="120" x="540" y="260" as="geometry"/>
+        </mxCell>
+        <mxCell id="9" parent="1" style="edgeStyle=orthogonalEdgeStyle;entryX=0;entryY=0.5;exitX=1;exitY=0.3;rounded=1;strokeColor=#94a3b8;strokeWidth=1.5;" value="REST API" edge="1" source="3" target="4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="10" parent="1" style="edgeStyle=orthogonalEdgeStyle;entryX=0;entryY=0.5;exitX=1;exitY=0.5;rounded=1;strokeColor=#94a3b8;strokeWidth=1.5;" value="REST API" edge="1" source="3" target="5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="11" parent="1" style="edgeStyle=orthogonalEdgeStyle;entryX=0;entryY=0.5;exitX=1;exitY=0.7;rounded=1;strokeColor=#94a3b8;strokeWidth=1.5;" value="REST API" edge="1" source="3" target="6">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="12" parent="1" style="edgeStyle=orthogonalEdgeStyle;entryX=0;entryY=0.5;exitX=1;exitY=0.3;rounded=1;strokeColor=#94a3b8;strokeWidth=1.5;" value="读写" edge="1" source="4" target="7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="13" parent="1" style="edgeStyle=orthogonalEdgeStyle;entryX=0;entryY=0.5;exitX=1;exitY=0.5;rounded=1;strokeColor=#94a3b8;strokeWidth=1.5;" value="读写" edge="1" source="5" target="7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="14" parent="1" style="edgeStyle=orthogonalEdgeStyle;entryX=0;entryY=0.5;exitX=1;exitY=0.7;rounded=1;strokeColor=#94a3b8;strokeWidth=1.5;" value="读写" edge="1" source="6" target="7">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="15" parent="1" style="edgeStyle=orthogonalEdgeStyle;entryDx=0;entryDy=0;entryX=0;entryY=0.5;exitX=1;exitY=0.5;rounded=1;strokeColor=#94a3b8;strokeWidth=1.5;" value="缓存查询" edge="1" source="5" target="8">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="460" y="218"/>
+              <mxPoint x="460" y="288"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="16" parent="1" style="edgeStyle=orthogonalEdgeStyle;entryDx=0;entryDy=0;entryX=0;entryY=0.5;exitX=1;exitY=0.5;rounded=1;strokeColor=#94a3b8;strokeWidth=1.5;" value="会话缓存" edge="1" source="4" target="8">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="460" y="93"/>
+              <mxPoint x="460" y="288"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
