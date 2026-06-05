@@ -19,4 +19,4 @@ echo   vscodeContentBase = '%ROOT_DIR%'
 :: Register winfs:// protocol for "Open in Explorer" button (once per machine, HKCU no admin)
 powershell -NoProfile -ExecutionPolicy Bypass -File "%CD%\scripts\setup_winfs_protocol.ps1"
 
-hugo server -D
+hugo server -D -p 1313

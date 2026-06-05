@@ -7,7 +7,7 @@ Hugo static blog (https://mr0ptimist.github.io/) using the PaperMod theme as a g
 ## Development Commands
 
 ```bash
-hugo server -D                  # Local preview (includes drafts)
+hugo server -D -p 1313             # Local preview (includes drafts, fixed port)
 hugo                            # Build to public/
 python scripts/new-post.py              # Interactive post creation — creates Page Bundle (文章名/index.md + context.json)
 python scripts/organize_post_images.py  # Organize post images into Page Bundles with compression
