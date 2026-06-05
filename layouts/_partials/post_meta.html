@@ -9,7 +9,7 @@
 {{- end }}
 
 {{- if (.Param "ShowWordCount") -}}
-    {{- $scratch.Add "meta" (slice (printf "<span>%s</span>" (i18n "words" .WordCount | default (printf "%d words" .WordCount)))) }}
+    {{- $scratch.Add "meta" (slice (printf "<span>%s</span>" (i18n "words" (countrunes .Plain) | default (printf "%d 字" (countrunes .Plain))))) }}
 {{- end }}
 
 {{- if not (.Param "hideAuthor") -}}

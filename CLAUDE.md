@@ -29,7 +29,7 @@ Hugo version: 0.160.1 extended.
   - Responsive width slider + TOC width slider (persisted in sessionStorage)
   - TOC auto-filtering (hides deeply nested headings, highlights active section)
 - **DDS/EXR Direct Viewer**: browser-side pixel decode + WebGL display. No preview PNGs needed — reference DDS/EXR files directly in markdown. Implementation details in `static/js/CLAUDE.md`.
-- **Auto-restart**: after editing any file in this project, Claude must restart `hugo server` so changes take effect immediately
+- **Auto-restart**: after editing any file in this project, Claude must restart `hugo server` so changes take effect immediately. Hugo server 在 watch 模式下会自动重载，无需手动重启。
 - **Custom header**: `layouts/_partials/header.html` (theme toggle, width controls, secret unlock button)
 
 ## Content Rules
