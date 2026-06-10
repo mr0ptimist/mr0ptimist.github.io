@@ -195,7 +195,7 @@
 /* Range badge (top-right, expected value range) */
 
 /* List page entry thumbnails (local section only) */
-.local-list .post-entry {
+.local-list .post-entry:has(.entry-thumb) {
   display: grid;
   grid-template-columns: 100px 1fr;
   gap: 14px;

@@ -146,11 +146,17 @@
                 <line x1="12" y1="17" x2="20" y2="17"></line>
             </svg>
         </button>
-        {{- if and site.Params.vscodeContentBase .File }}
+        {{- end }}
+        {{- if site.Params.vscodeContentBase }}
         {{- $base := strings.TrimSuffix "/" site.Params.vscodeContentBase -}}
-        {{- $path := replace .File.Path "\\" "/" -}}
-        {{- $url := delimit (slice "vscode://file" $base "content" $path) "/" -}}
-        {{- $absPath := printf "%s/content/%s" $base $path -}}
+        {{- $absPath := $base -}}
+        {{- $url := $base -}}
+        {{- if .File }}
+            {{- $path := replace .File.Path "\\" "/" -}}
+            {{- $url = delimit (slice "vscode://file" $base "content" $path) "/" -}}
+            {{- $absPath = printf "%s/content/%s" $base $path -}}
+        {{- end }}
+        {{- if and (eq .Kind "page") (ne .Type "stats") }}
         <a href="{{ $url | safeURL }}" class="collapse-all-btn" title="VS Code 打开">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -158,6 +164,7 @@
                 <polyline points="8 6 2 12 8 18"></polyline>
             </svg>
         </a>
+        {{- end }}
         <button class="collapse-all-btn" title="在资源管理器中选中"
             data-dev-action="explore-dir" data-dev-path="{{ $absPath }}" onclick="devAction(this)">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
@@ -181,6 +188,7 @@
                 <line x1="12" y1="19" x2="20" y2="19"></line>
             </svg>
         </button>
+        {{- if .File }}
         <button class="collapse-all-btn" title="Claude Code 问答当前文章"
             data-dev-action="claude-article" data-dev-path="{{ $absPath }}" onclick="devAction(this)">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
