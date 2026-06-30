@@ -73,7 +73,7 @@
 {{- $class = "post-entry tag-entry" }}
 {{- end }}
 
-<article class="{{ $class }}{{ if $isHidden }} secret-post{{ end }}"{{ if $isHidden }} style="display:none"{{ end }}
+<article class="{{ $class }}"{{ if $isHidden }} style="display:none"{{ end }}
   data-sort-date="{{ .Date.Format "2006-01-02" }}"
   data-sort-lastmod="{{ if and .File (eq .Kind "page") }}{{ (os.Stat (printf "content/%s" .File.Path)).ModTime.Format "2006-01-02" }}{{ else }}{{ .Date.Format "2006-01-02" }}{{ end }}"
   data-sort-title="{{ .Title | plainify }}">

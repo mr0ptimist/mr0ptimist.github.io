@@ -27,10 +27,6 @@
     <li>
         <a href="{{ .Permalink }}">{{ .LinkTitle }} <sup><strong><sup>{{ $count }}</sup></strong></sup> </a>
     </li>
-    {{- else }}
-    <li class="secret-term" style="display:none">
-        <a href="{{ .Permalink }}">{{ .LinkTitle }} <sup><strong><sup>{{ $count }}</sup></strong></sup> </a>
-    </li>
     {{- end }}
     {{- end }}
     {{- end }}

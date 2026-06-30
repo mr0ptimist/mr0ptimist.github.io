@@ -18,7 +18,7 @@ buildFuture = true
   ShowCodeCopyButtons = true
   ShowToc = true
   TocOpen = true
-  secretPassword = '123456'
+
   mainSections = ['posts', 'local']
 
   [params.profileMode]

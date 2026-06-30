@@ -45,16 +45,7 @@
                         <polyline points="13 8 17 12 13 16"></polyline>
                     </svg>
                 </button>
-                {{- if site.Params.secretPassword }}
-                <button id="secret-toggle" class="secret-toggle" title="Secret" aria-label="Secret">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                        <path d="M7 11V7a5 5 0 0110 0v4"></path>
-                    </svg>
-                </button>
-                {{- end }}
+
                 {{- if (not site.Params.disableThemeToggle) }}
                 <button id="theme-toggle" class="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
                     <svg class="moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
@@ -204,14 +195,6 @@
     </nav>
 </header>
 
-{{- if site.Params.secretPassword }}
-<div id="secret-modal" class="secret-modal" style="display:none">
-    <div class="secret-modal-inner">
-        <input type="password" id="secret-modal-input" autocomplete="off" />
-        <button id="secret-modal-submit" type="button">&#x2713;</button>
-    </div>
-</div>
-{{- end }}
 
 <div id="width-panel" class="width-panel" style="display:none">
     <div class="width-panel-inner">
