@@ -17,7 +17,6 @@ draft = false                         # true=草稿，仅 hugo serve -D 可见
 title = '文章标题'
 tags = ['标签1', '标签2']
 categories = ['分类名']
-hidden = true                         # 可选，密码保护
 +++
 ```
 
@@ -106,3 +105,27 @@ content/posts/{文章名}/
 | `out` | `#f3e5f5` | 最终结果 |
 
 每个 classDef 都必须带 `color:#000`，例如 `classDef proc fill:#e1f5fe,color:#000`。
+
+## 文章分组（Section 文件夹）
+
+多篇文章需要归类时，用文件夹层级 + 各层 `_index.md`：
+
+```
+content/posts/UE/
+  _index.md           ← title = 'UE'（TOML front matter，无需正文）
+  Landscape/
+    _index.md         ← title = 'Landscape 地形'
+    文章A/index.md
+    文章B/index.md
+```
+
+- `_index.md` 让文件夹成为 Hugo section，列表页树形视图自动渲染为可折叠文件夹
+- 空 section 自动隐藏；单篇文章用 Page Bundle 即可，不需套 `_index.md`
+- 同样适用于 `content/local/`
+
+## 缩略图
+
+列表页自动提取每篇文章首张图片作为缩略图：
+- 匹配 `![...](....dds/exr/png/jpg/jpeg/webp)`，相对路径自动补全
+- DDS/EXR 由浏览器端 JS 解码为 canvas；无图的文章显示圆点 bullet
+- 建议在文章开头放一张有代表性的截图
