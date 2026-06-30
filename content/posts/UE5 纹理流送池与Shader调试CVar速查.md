@@ -1,8 +1,8 @@
----
-title: "UE 纹理流送池与 Shader 调试 CVar 速查"
-date: 2026-04-20
-tags: [UE, RenderDoc, Shader Debug]
----
++++
+title = 'UE 纹理流送池与 Shader 调试 CVar 速查'
+date = '2026-04-20T10:00:00+08:00'
+tags = ['UE', 'RenderDoc', 'Shader Debug']
++++
 
 ## 纹理流送池
 
