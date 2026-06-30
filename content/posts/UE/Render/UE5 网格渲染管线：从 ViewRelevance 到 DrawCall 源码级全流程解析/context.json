@@ -14,7 +14,7 @@
     },
     {
       "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Public/MeshPassProcessor.h",
-      "note": "EMeshPass 枚举 (39 种)、FMeshDrawCommand 类、FMeshPassProcessor 基类、FMeshPassMask 位掩码"
+      "note": "EMeshPass 枚举 (39 种)、FMeshDrawCommand 类、FMeshPassProcessor 基类、FMeshPassMask 位掩码、三个 DrawListContext 子类（FDynamicPassMeshDrawListContext L1802 / FCachedPassMeshDrawListContext L1968 / FCachedPassMeshDrawListContextDeferred L2043）"
     },
     {
       "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/MeshPassProcessor.cpp",
@@ -26,7 +26,7 @@
     },
     {
       "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/MeshDrawCommands.h",
-      "note": "FParallelMeshDrawCommandPass 类声明、FMeshDrawCommandPassSetupTaskContext"
+      "note": "FParallelMeshDrawCommandPass(121-259)：三阶段接口 DispatchPassSetup → BuildRenderingCommands → Draw/Dispatch；FMeshDrawCommandPassSetupTaskContext(60-119)是其嵌套持有的 TaskContext 结构体，非类本体"
     },
     {
       "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/MeshDrawCommands.cpp",
@@ -77,5 +77,5 @@
       "note": "FInstanceCullingContext::SubmitDrawCommands() (L1673) — GPU Scene 间接绘制提交"
     }
   ],
-  "notes": "引擎版本 UE 5.5 (D:/BuildUnrealEngine)。分析基于 Swarm 12 个 Agent 并行扫描上述源码后汇总。覆盖传统网格渲染管线从 GetViewRelevance 到 RHI DrawIndexedPrimitive 的全流程，不涉及 Nanite GPU 端剔除和光栅化的内部细节。"
+  "notes": "引擎版本 UE 5.7 (D:/BuildUnrealEngine)。分析基于 Swarm 12 个 Agent 并行扫描上述源码后汇总。覆盖传统网格渲染管线从 GetViewRelevance 到 RHI DrawIndexedPrimitive 的全流程，不涉及 Nanite GPU 端剔除和光栅化的内部细节。"
 }

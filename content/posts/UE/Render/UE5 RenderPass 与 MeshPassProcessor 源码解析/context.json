@@ -1,0 +1,85 @@
+{
+  "code_refs": [
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Public/MeshPassProcessor.h",
+      "note": "MeshPassProcessor.h：EMeshPass::NumBits=6 限制最多 64 种 Pass 类型；FCachedMeshDrawCommandInfo 中 MeshPass 以 NumBits+1=7 位位域存储；FMeshDrawCommandSortKey（BasePass/Translucent/Generic 布局）不包含 MeshPassType 字段，MeshPassType 是独立存储于 SortKey 旁边的字段；FGraphicsMinimalPipelineStateInitializer 类定义（L341-566），operator== 比较了 PSO 唯一性的全部字段"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Public/MeshPassProcessor.inl",
+      "note": "BuildMeshDrawCommands 模板签名，MeshPassProcessor.h 中声明，MeshPassProcessor.inl 第 49-62 行为定义"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/MeshDrawCommands.h",
+      "note": "FParallelMeshDrawCommandPass(121-259)：三阶段接口 DispatchPassSetup → BuildRenderingCommands → Draw/Dispatch；FMeshDrawCommandPassSetupTaskContext(60-119)是其嵌套持有的 TaskContext 结构体，非类本体"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/MeshDrawCommands.cpp",
+      "note": "DispatchPassSetup 实现、BuildRenderingCommands、SubmitDraw/Dispatch 分发逻辑"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Public/SimpleMeshDrawCommandPass.h",
+      "note": "SimpleMeshDrawCommandPass.h：FSimpleMeshDrawCommandPass 类在 21-62，AddSimpleMeshPass 模板函数族在 65-209"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/MeshPassProcessor.cpp",
+      "note": "FMeshDrawCommand::SubmitDrawEnd 最终 RHI Draw 提交，行号 1302-1356；DrawIndexedPrimitive line 1320；DrawPrimitive line 1343"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/BasePassRendering.cpp",
+      "note": "BasePass 注册宏参数：REGISTER_MESHPASSPROCESSOR_AND_PSOCOLLECTOR，第一个参数为 BasePass（非 DeferredBasePass）"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/BasePassRendering.h",
+      "note": "FBasePassMeshProcessor 类定义"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/SceneRendering.cpp",
+      "note": "FSceneRenderer::SetupMeshPass、RegisterPostOpaqueRenderDelegate 广播、PostRenderViewFamily_RenderThread (L4672)、PostOpaqueRender 委托广播点（SceneRendering.cpp:5395）"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/SceneRendering.h",
+      "note": "FSceneRenderer 成员声明：CreateMeshPass (L1286) 和 ParallelMeshDrawCommandPasses 数组 (L1288)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/DeferredShadingRenderer.cpp",
+      "note": "DeferredShadingRenderer.cpp：PreRenderBasePass_RenderThread、PrePostProcessPass_RenderThread、PostOpaqueRender 广播点、AddPostProcessingPasses 入口；GPU Scene 更新作用域 2168-2190（UploadDynamicPrimitiveShaderDataForView:2178, InitInstanceState:2182-2183, UpdatePhysicsField:2185-2189），FinishGatherDynamicMeshElements:2153；RenderNanite 函数（Nanite 光栅化全流程，Visibility Buffer + Culling + Rasterization + Depth Emission，核心光栅化块 1675-1703，PrimeHZB 1588-1668）；FNaniteVisibility::BeginVisibilityQuery 调用 (L1904)；PrePostProcessPass_RenderThread（L3996）与 AddPostProcessingPasses（L4039）并非紧邻——中间有第二个 View 循环（L3999-4007）和校准材质/管线状态/InstancedStereo 准备（L4009-4037）"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Engine/Public/SceneViewExtension.h",
+      "note": "ISceneViewExtension 接口、EPostProcessingPass 枚举、FSceneViewExtensionBase"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Engine/Public/SceneViewExtensionContext.h",
+      "note": "FSceneViewExtensionContext 上下文"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/PostProcess/PostProcessing.cpp",
+      "note": "PostProcessing.cpp：AddPostProcessingPasses 函数，行 750-777 为 SubscribeToPostProcessingPass 分组逻辑（行 750 static_assert，Subscribe 调用在行 763/771）；早期 Pass 为 BeforeDOF~ReplacingTonemapper（5 个）；后期 Pass 存入 PassSequence.GetAfterPassCallbacks()"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/PostProcess/PostProcessTonemap.cpp",
+      "note": "AddTonemapPass RDG Pass 分发模式示例"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/InstanceCulling/InstanceCullingContext.cpp",
+      "note": "FInstanceCullingContext::SubmitDrawCommands GPU 实例剔除后批量 SubmitDrawBegin/SubmitDrawEnd"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/RenderCore/Public/RendererInterface.h",
+      "note": "FPostOpaqueRenderParameters 委托签名、RegisterPostOpaqueRenderDelegate / RegisterOverlayRenderDelegate 委托、RegisterCustomCullingImpl / UnregisterCustomCullingImpl 自定义剔除接口"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/TranslucentRendering.cpp; D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Internal/TranslucentPassResource.h",
+      "note": "ETranslucencyPass 枚举定义见 TranslucentPassResource.h:10-24；半透明 Pass 调度入口在 TranslucentRendering.cpp:1849（RenderTranslucency 函数），三级分层调度在 1958-1972"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/GPUScene.h",
+      "note": "FGPUScene::UploadDynamicPrimitiveShaderDataForView 声明 — GPU Scene 更新时机"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/GPUScene.cpp",
+      "note": "FGPUScene::UpdateInternal (L883) — GPUScene 主更新逻辑；UploadDynamicPrimitiveShaderDataForViewInternal (L493 in .h)"
+    }
+  ],
+  "notes": "UE 5.5 引擎源码。涵盖 RenderPass 架构全貌：FMeshPassProcessor 注册/执行、RDG 桥接机制、帧级 Pass 编排全景、ISceneViewExtension 全部钩子、PSO 预缓存系统、Nanite 与传统管线分流点、GPU Scene 更新时机、BasePass 和 PostProcess 两条实战代码路径追踪。补充阅读：《UE5 网格渲染管线：从 ViewRelevance 到 DrawCall 源码级全流程解析》（可见性侧）。"
+}

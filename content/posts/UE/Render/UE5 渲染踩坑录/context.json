@@ -1,0 +1,45 @@
+{
+  "code_refs": [
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/RenderCore/Public/ShaderParameterMacros.h",
+      "note": "静态槽/UB 宏定义。IMPLEMENT_STATIC_UNIFORM_BUFFER_SLOT(:1659)，BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT==BEGIN_UNIFORM_BUFFER_STRUCT(:1663)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Engine/Private/SceneTexturesConfig.cpp",
+      "note": "SceneTextures 静态槽注册。IMPLEMENT_STATIC_UNIFORM_BUFFER_SLOT(SceneTextures)(:15)，FSceneTextureUniformParameters 挂 SceneTextures 槽(:16)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/BasePassRendering.h",
+      "note": "BasePass UB 定义。FSharedBasePass(:78)，FOpaqueBasePass(:89，不内嵌 SceneTextures)，FTranslucentBasePass(:106，内嵌 SceneTextures)。ValidateCompiledResult CS(:361-370) PS(:567-576)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/BasePassRendering.cpp",
+      "note": "OpaqueBasePass/TranslucentBasePass IMPLEMENT_STATIC(:137-138)。IS_BASE_PASS/SCENE_TEXTURES_DISABLED 设置(:1049,1057)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Shaders/Private/BasePassPixelShader.usf",
+      "note": "BasePass PS 入口。SceneTexturesStruct alias 重定向(:22-55)，SLW BlueNoise(:57-59)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/RHICore/Public/RHICoreShader.h",
+      "note": "ApplyStaticUniformBuffers 模板(:64-104)，平行数组 LayoutHashes/Slots 遍历 + ValidateStaticUniformBuffer"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/RHICore/Private/RHICoreShader.cpp",
+      "note": "ValidateStaticUniformBuffer(:43-58)，hash 比对 + checkf 报错信息"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/RenderCore/Private/ShaderCore.cpp",
+      "note": "BuildShaderFileToUniformBufferMap(:3534，大小写不敏感子串搜索 UBName.) + GenerateReferencedUniformBuffers(:3731)"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Shaders/Private/SceneTexturesCommon.ush",
+      "note": "deferred 路径下所有场景纹理函数都读全局 SceneTexturesStruct，由 SCENE_TEXTURES_DISABLED 门控"
+    },
+    {
+      "path": "D:/BuildUnrealEngine/Engine/Source/Runtime/Renderer/Private/SingleLayerWaterRendering.cpp",
+      "note": "SLW 参考实现。FSingleLayerWaterPassUniformParameters(:357-374)，复用 DeferredDecals 槽(:376-378)"
+    }
+  ],
+  "notes": "引擎版本：D:/BuildUnrealEngine（L66 修改版 UE5）。外部参考文件：D:/Projects/UnrealProjects/TerrainDemo/docs/ue-static-ub-and-basepass-scenetextures.md（TMB Stencil Pass 开发深度笔记）。核查日期：2026-06-12。"
+}

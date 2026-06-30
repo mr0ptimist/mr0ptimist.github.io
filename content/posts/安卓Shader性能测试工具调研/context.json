@@ -1,0 +1,5 @@
+{
+  "rdc_files": [],
+  "code_refs": [],
+  "notes": "消费级安卓机 Shader 性能与 ALU 测试 CLI 工具调研：malioc / AOC 离线编译器 + mperf / libGPUCounters PMU 实测 + Perfetto / AGI 系统追踪。无 UE 源码依赖。"
+}

@@ -1,0 +1,5 @@
+{
+  "rdc_files": [],
+  "code_refs": [],
+  "notes": "纹理压缩格式详解：BC1-BC7 (Block Compression) / ETC1-ETC2+EAC (Ericsson) / PVRTC1-PVRTC2 (PowerVR) / ASTC (Arm+AMD) 四大家族的技术细节、码率、硬件支持和适用场景。无 UE 源码依赖。"
+}

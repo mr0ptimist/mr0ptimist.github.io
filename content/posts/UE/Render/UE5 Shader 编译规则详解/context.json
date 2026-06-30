@@ -1,0 +1,26 @@
+{
+  "rdc_files": [],
+  "code_refs": [
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/RenderCore/Public/ShaderPermutation.h",
+      "note": "TShaderPermutationDomain 排列维度定义"
+    },
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/RenderCore/Public/Shader.h",
+      "note": "FShaderType 全局注册表，ShouldCompilePermutation"
+    },
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/RenderCore/Public/VertexFactory.h",
+      "note": "FVertexFactoryType 全局注册表，ShouldCache"
+    },
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Engine/Public/ShaderCompiler.h",
+      "note": "FShaderCompilingManager 编译管理器"
+    },
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Renderer/Private/LightRendering.cpp",
+      "note": "FDeferredLightPS 14 维度排列实例"
+    }
+  ],
+  "notes": "UE Shader 编译规则详解：排列组合 × VertexFactory × Platform 的笛卡尔积 + 三级过滤机制"
+}

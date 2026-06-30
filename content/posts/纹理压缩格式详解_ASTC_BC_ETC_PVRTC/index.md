@@ -34,7 +34,7 @@ BC 系列是 DirectX 生态中最主流的压缩格式，由 S3TC（DXT）发展
 
 **编码端**：向压缩器提供带 Alpha 的源图（如 PNG with 1-bit alpha），大多数 BC1 编码器（如 DirectXTex、`nvcompress`、Compressonator）会自动判断 block 是否需要透明模式。若源图 alpha 为纯 0/255，编码器会尽量使用 `color0 <= color1` 模式将 `11` 映射为透明。
 
-**API/格式**：DirectX/Vulkan 中统一使用 `DXGI_FORMAT_BC1_UNORM`（或 `_SRGB`），API 层面不区分"带不带 alpha"，alpha 行为完全由 block 数据中的 color0/color1 顺序决定。
+**API/格式**：Direct3D 与 Vulkan 对 BC1 的 alpha 处理并不统一：Direct3D 用单一 DXGI_FORMAT_BC1_UNORM（或 _SRGB/_TYPELESS）覆盖有/无 1-bit alpha 两种情形（是否含 alpha 由块编码决定）；而 Vulkan 在 API 层面显式区分无 alpha 的 VK_FORMAT_BC1_RGB_UNORM_BLOCK/_SRGB_BLOCK（"has no alpha and is considered opaque"）与带 1-bit alpha 的 VK_FORMAT_BC1_RGBA_UNORM_BLOCK/_SRGB_BLOCK（"provides 1 bit of alpha"），两者并非同一格式枚举。
 
 **Shader 端**：BC1 的 1-bit alpha 只能用于 **Alpha Test / Alpha Cutout**，不能做平滑混合。在 HLSL/GLSL 中需显式 `clip(alpha - 0.5)` 或设置管线 Alpha Test。若直接用于 Alpha Blend，透明边缘会出现锯齿与排序瑕疵。
 
@@ -126,8 +126,8 @@ ETC2 RGBA8（`GL_COMPRESSED_RGBA8_ETC2_EAC`）即 ETC2 RGB + EAC Alpha，总 **8
 ### ETC 格式要点
 
 - **OpenGL ES 3.0+**：强制支持
-- **Vulkan / OpenGL 4.3+**：核心支持
-- **局限**：仅支持 2D 纹理与 2D 数组，**不支持 3D 纹理**
+- **Vulkan / OpenGL 4.3+**：ETC 在 OpenGL 4.3+ 为强制核心支持，在 Vulkan 中为核心可选特性（由可选特性 textureCompressionETC2 控制，需查询启用，非强制）；仅支持 2D 纹理与 2D 数组（及 cube map 数组），不支持 3D 纹理
+- **局限**：仅支持 2D 纹理与 2D 数组（及 cube map 数组），**不支持 3D 纹理**
 
 ## PVRTC 系列（PowerVR Texture Compression）
 
@@ -137,7 +137,7 @@ PVRTC 由 Imagination Technologies 开发，是 PowerVR GPU 的原生格式，�
 
 与 BC、ETC、ASTC 等块化格式不同，PVRTC 的解码流程如下：
 
-1. 存储两幅低频颜色图像 **Image A** 与 **Image B**，每个 8×4（或 4×8）像素区域共享一个颜色值，块间做双线性插值上采样至全分辨率
+1. 存储两幅低频颜色图像 **Image A** 与 **Image B**，每个 4×4（4bpp 时）或 8×4（2bpp 时）像素区域共享一个颜色值，相邻 data-word 间做双线性插值上采样至全分辨率
 2. 使用全分辨率、低精度的 **调制信号 M**（4bpp 时每像素 2 位，2bpp 时每像素 1 位）逐像素混合两幅上采样图像
 
 这种设计避免了块边界处的明显不连续，但代价是解压时需引用相邻块数据，硬件实现复杂度更高。
@@ -151,7 +151,7 @@ PVRTC 由 Imagination Technologies 开发，是 PowerVR GPU 的原生格式，�
 | PVRTC2 4bpp | 4 | RGB/RGBA | 支持 NPOT、纹理图集 |
 | PVRTC2 2bpp | 2 | RGB/RGBA | 同上 |
 
-据 [Imagination PVRTC 文档](https://docs.imaginationtech.com/pvrtextool/pvrtc/) 描述，PVRTC2 引入了硬过渡标志（Hard Transition Flag）、非插值模式（Non-interpolated mode）和局部调色板模式（Local Palette Mode），显著改善了锐利边缘与特定纹理类型的质量。
+据 [Imagination PVRTC 文档](https://docs.imgtec.com/tools-manuals/pvrtextool-manual/html/index.html)（PVRTC 专题见 [PVRTC 指南](https://docs.imgtec.com/performance-guides/graphics-recommendations/html/topics/pvrtc/texture-compression-using-pvrtc.html)）描述，PVRTC2 引入了硬过渡标志（Hard Transition Flag）、非插值模式（Non-interpolated mode）和局部调色板模式（Local Palette Mode），显著改善了锐利边缘与特定纹理类型的质量。
 
 ### 硬件与生态
 
@@ -160,11 +160,11 @@ PVRTC 由 Imagination Technologies 开发，是 PowerVR GPU 的原生格式，�
   - `GL_COMPRESSED_RGB_PVRTC_4BPPV1_IMG`
   - `GL_COMPRESSED_RGBA_PVRTC_4BPPV1_IMG`
   - 对应 2bpp 变体
-- **工具**：Imagination 官方提供 [PVRTexTool](https://docs.imaginationtech.com/pvrtextool/)，支持编码至 PVRTC、ASTC、ETC、BC 等格式
+- **工具**：Imagination 官方提供 [PVRTexTool](https://docs.imgtec.com/tools-manuals/pvrtextool-manual/html/topics/introduction.html)（产品页：https://developer.imaginationtech.com/solutions/pvrtextool/ ），支持编码至 PVRTC、ASTC、ETC、BC 等格式
 
 ## ASTC（Adaptive Scalable Texture Compression）
 
-ASTC 由 **Arm 与 AMD** 联合开发，2012 年被 Khronos 采纳为 OpenGL ES、Vulkan 的官方扩展，是目前**灵活性最高**的硬件纹理压缩标准。
+ASTC 由 **Arm 与 AMD** 联合开发，2012 年被 Khronos 采纳为 OpenGL、OpenGL ES 的官方扩展，并在 Vulkan（2016 年起）中作为可选标准特性提供支持，是目前**灵活性最高**的硬件纹理压缩标准。
 
 ### 核心特性
 
@@ -189,13 +189,14 @@ ASTC 亦支持 3D 纹理，码率范围为 **0.59 bpp（6×6×6）~ 4.74 bpp（3
 
 ### Profile 与 API 支持
 
-ASTC 分为多个 Profile，以支持分阶段的硬件普及：
+ASTC 分为 LDR Profile（GL_KHR_texture_compression_astc_ldr，Vulkan 可选核心特性 textureCompressionASTC_LDR，支持 2D 及 sRGB）、HDR Profile（GL_KHR_texture_compression_astc_hdr，Vulkan 1.3 核心可选，原 VK_EXT_texture_compression_astc_hdr，在 LDR 基础上增加 HDR 与 slice-based 3D）、LDR+Sliced 3D（GL_KHR_texture_compression_astc_sliced_3d，在 LDR profile 上增加 slice-based 3D）以及 Full Profile（GL_OES_texture_compression_astc，含 2D + 体积 3D + LDR/sRGB/HDR）。注：sRGB 能力属于 LDR Profile，并非 OES 专属。
 
 | Profile | 支持特性 | OpenGL ES | Vulkan |
 |---------|---------|-----------|--------|
-| LDR Profile | 2D LDR 纹理 | `GL_KHR_texture_compression_astc_ldr` | 可选核心特性 `textureCompressionASTC` |
-| HDR Profile | LDR + HDR 纹理 | `GL_KHR_texture_compression_astc_hdr` | Vulkan 1.3 核心可选（原 `VK_EXT_texture_compression_astc_hdr`） |
-| sRGB + 3D | LDR + sRGB + 3D 纹理 | `GL_OES_texture_compression_astc` | 可选核心特性（需 LDR 特性支持） |
+| LDR Profile | 2D LDR 纹理（含 sRGB） | `GL_KHR_texture_compression_astc_ldr` | 可选核心特性 `textureCompressionASTC_LDR` |
+| HDR Profile | LDR + HDR 纹理 + slice-based 3D | `GL_KHR_texture_compression_astc_hdr` | Vulkan 1.3 核心可选（原 `VK_EXT_texture_compression_astc_hdr`） |
+| LDR + Sliced 3D | LDR + slice-based 3D 纹理 | `GL_KHR_texture_compression_astc_sliced_3d` | 可选核心特性（需 LDR 特性支持） |
+| Full Profile | 2D + 体积 3D + LDR/sRGB/HDR | `GL_OES_texture_compression_astc` | 可选核心特性（需 LDR 特性支持） |
 
 ### 颜色与通道灵活性
 
@@ -234,7 +235,7 @@ Arm 提供开源参考编解码器 [**astcenc**](https://github.com/ARM-software
 | Android 通用（GLES 3.0+）| ETC2 | 强制支持，无兼容性风险 |
 | Android 高品质/法线 | ASTC 4×4~6×6 | 灵活码率，质量显著优于 ETC2 |
 | iOS（现代 A8+）| ASTC | 硬件支持，取代 PVRTC |
-| iOS（旧设备 A7 前）| PVRTC1/2 | 唯一原生支持 |
+| iOS（旧设备 A7 及之前）| PVRTC1 | PVRTC1（2bpp/4bpp）原生支持；自 A7 起另支持 ETC2；PVRTC2 虽硬件可支持但被 Apple 在 iOS 上禁用 |
 | 移动端统一 | ASTC 4×4/6×6 | iOS A8+、Android Mali/Adreno 主流硬件支持 |
 
 ## 参考
@@ -245,6 +246,8 @@ Arm 提供开源参考编解码器 [**astcenc**](https://github.com/ARM-software
 - [Arm ASTC Compression Formats](https://developer.arm.com/documentation/102162/latest) — ASTC 技术细节与 Mali GPU 纹理压缩指南
 - [Microsoft DirectXTex Compress Wiki](https://github.com/microsoft/DirectXTex/wiki/Compress) — BC 格式压缩 API 与实现说明
 - [Arm ASTC Encoder (astcenc) GitHub](https://github.com/ARM-software/astc-encoder) — 开源编解码器源码与格式文档
-- [Imagination PVRTC 文档](https://docs.imaginationtech.com/pvrtextool/pvrtc/) — PVRTC 算法原理与编码说明
-- [Imagination PVRTexTool](https://docs.imaginationtech.com/pvrtextool/) — 官方纹理压缩工具
-- [NVIDIA ASTC Texture Compression for Game Assets](https://developer.nvidia.com/astc-texture-compression-game-assets) — ASTC 在游戏资源中的应用建议
+- [Imagination PVRTC 文档](https://docs.imgtec.com/tools-manuals/pvrtextool-manual/html/index.html)（PVRTC 专题见 [PVRTC 指南](https://docs.imgtec.com/performance-guides/graphics-recommendations/html/topics/pvrtc/texture-compression-using-pvrtc.html)） — PVRTC 算法原理与编码说明
+- [Imagination PVRTexTool](https://docs.imgtec.com/tools-manuals/pvrtextool-manual/html/topics/introduction.html)（产品页：https://developer.imaginationtech.com/solutions/pvrtextool/ ） — 官方纹理压缩工具
+- [NVIDIA ASTC Texture Compression for Game Assets](https://developer.nvidia.com/astc-texture-compression-for-game-assets) — ASTC 在游戏资源中的应用建议
+
+> **📋 事实核查**：本文于 2026-06-30 经 exa 多源核查，共 45 条陈述（✅ 40 正确 / ❌ 5 有误 / ❓ 0 存疑，已修正 5 处）。

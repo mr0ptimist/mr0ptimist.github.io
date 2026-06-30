@@ -1,0 +1,19 @@
+{
+  "rdc_files": [
+    {
+      "path": "",
+      "note": "Landscape RVT 烘焙 RenderDoc 抓帧，EID 564 起，含 VirtualTextureFinalizeRequests / VirtualTexturePageTableUpdates 完整事件树"
+    }
+  ],
+  "code_refs": [
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Renderer/Private/VT/VirtualTextureSystem.cpp",
+      "note": "VT 更新总入口，VirtualTextureFinalizeRequests 调度"
+    },
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Renderer/Private/VT/VirtualTextureSpace.cpp",
+      "note": "PageTableUpdate 实现"
+    }
+  ],
+  "notes": "UE 5.x 编辑器模式，TerrainDemo 场景，一帧内 RVT 烘焙的完整 GPU 事件流水线"
+}

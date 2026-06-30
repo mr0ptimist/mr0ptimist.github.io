@@ -1,0 +1,5 @@
+{
+  "rdc_files": [],
+  "code_refs": [],
+  "notes": "移动端 GPU 可见性剔除机制对比：PowerVR HSR / Apple HSR / Mali FPK / Adreno LRZ / Early-Z 五种机制的粒度、特性、硬件支持和实践建议。无 UE 源码依赖。"
+}

@@ -6,7 +6,7 @@ tags = ['UE5', '渲染管线', '源码分析', 'MeshDrawCommand', '可见性']
 categories = ['图形渲染']
 +++
 
-> 本文基于 UE 5.5 引擎源码，追踪场景中一个网格从 `GetViewRelevance()` 判定到最终 `DrawIndexedPrimitive()` 的完整路径。所有代码引用标注了引擎内原始路径和行号。
+> 本文基于 UE 5.7 引擎源码，追踪场景中一个网格从 `GetViewRelevance()` 判定到最终 `DrawIndexedPrimitive()` 的完整路径。所有代码引用标注了引擎内原始路径和行号。
 
 ---
 
@@ -906,7 +906,7 @@ r.MeshDrawCommands.LogDynamicInstancingStats 1 // 动态实例化统计
 
 ## 参考
 
-- UE 5.5 引擎源码 `Engine/Source/Runtime/Renderer/Private/SceneVisibility.cpp`
-- UE 5.5 引擎源码 `Engine/Source/Runtime/Renderer/Public/MeshPassProcessor.h`
-- UE 5.5 引擎源码 `Engine/Source/Runtime/Renderer/Private/MeshDrawCommands.cpp`
-- UE 5.5 引擎源码 `Engine/Source/Runtime/Engine/Public/PrimitiveViewRelevance.h`
+- UE 5.7 引擎源码 `Engine/Source/Runtime/Renderer/Private/SceneVisibility.cpp`
+- UE 5.7 引擎源码 `Engine/Source/Runtime/Renderer/Public/MeshPassProcessor.h`
+- UE 5.7 引擎源码 `Engine/Source/Runtime/Renderer/Private/MeshDrawCommands.cpp`
+- UE 5.7 引擎源码 `Engine/Source/Runtime/Engine/Public/PrimitiveViewRelevance.h`

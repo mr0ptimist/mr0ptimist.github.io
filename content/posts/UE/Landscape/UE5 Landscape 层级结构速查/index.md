@@ -12,8 +12,6 @@ categories = ['图形渲染']
 
 UE5 Landscape 原点在**左上角**，X 轴向右，Y 轴向下。
 
----
-
 ### ① 整体 Landscape — 4×4 StreamingProxy，共 1,008×1,008 quads
 
 **类**：每个格子是一个 `ALandscapeStreamingProxy`（继承自抽象基类 `ALandscapeProxy`）；整张地形有且仅有一个主 Actor `ALandscape`（同样继承 `ALandscapeProxy`），持有共享的材质、LOD 等配置。跨 Proxy 的逻辑聚合由 `ULandscapeInfo`（Transient UObject，通过 `LandscapeGuid` 串联所有 Proxy）负责。
@@ -38,8 +36,6 @@ comp      ╠══════════╬══════════╬�
   - 末尾 `_0` 为同坐标消歧索引，通常恒为 0
 - 每 Proxy = 2×2 Components = 252×252 quads
 - 每 Proxy = 独立 `.uasset`（OFPA），独立流送加载 / 卸载
-
----
 
 ### ② 放大 Proxy `_4_2` ★ — 内含 2×2 Component，252×252 quads
 
@@ -73,8 +69,6 @@ comp      │  126×126 q   │  126×126 q   │   252q
 - 是材质实例（MIC）绑定与 `ValidateCombinationMaterial` 的最小单位
 - 引擎日志 `missing layer Grass` 就是逐 Component 报的
 
----
-
 ### ③ 放大 `Comp[4,2]` — 内含 2×2 Subsection，126×126 quads
 
 **类**：Subsection 和 Quad 均无独立类。Subsection 的划分参数存于 `ALandscapeProxy` 的 `NumSubsections`（每边 Subsection 数）和 `SubsectionSizeQuads`（每 Subsection 的 quad 数，此处为 63）字段。
@@ -94,8 +88,6 @@ quad      ║  63×63 q    ║  63×63 q    ║   126q
 - Subsection = LOD 裁剪 / 计算的最小单位，可独立切 LOD 级别
 - Quad = 最小格子（四顶点围成），即 1×1 单位
 
----
-
 ### 创建面板字段对照
 
 UE5 Landscape 创建面板中各字段与上述层级的对应关系：
@@ -114,8 +106,6 @@ UE5 Landscape 创建面板中各字段与上述层级的对应关系：
 | 地形代理数量 | `GetSortedStreamingProxies().Num()` + 1 | `ULandscapeInfo` | 总 Component 数 ÷ 每 Proxy Component 数 + 1（`ALandscape` 本身） | 1,025（= 32×32 + 1） | 17（= 4×4 + 1） |
 | 总组件数 | `XYtoComponentMap.Num()` | `ULandscapeInfo`（仅 Editor） | 边长 Proxy 数 × 每 Proxy 边长 Component 数，再平方 | 4,096（= 64×64，64 = 32×2） | 64（= 8×8，8 = 4×2） |
 | 整体分辨率（顶点） | 无单一变量，派生值 | — | 边长 Component 数 × `ComponentSizeQuads` + 1 | 16,321（= 64×255+1） | 1,009（= 8×126+1） |
-
----
 
 ### 汇总
 

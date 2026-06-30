@@ -87,5 +87,5 @@
       "note": "传统 BasePass PS 入口 MainPS：GetMaterialPixelParameters → BRDF → GBuffer SV_Target MRT 输出；FPixelShaderInOut_MainPS 被 Nanite CS 直接调用"
     }
   ],
-  "notes": "文章基于 UE 5.4/5.5 源码，在 UE 5.7 验证关键文件路径均存在。核心论点：Nanite 通过 VisBuffer64+ShadingBinning+CS UAV 将几何/着色/调度三层 GPU 化，材质评估代码(FPixelShaderInOut_MainPS)与传统管线完全复用。勘误：文中 PSOPrecache 文件路径写作 Renderer/Private，实际在 Engine/Source/Runtime/Engine/Private/。TerrainDemo 抓帧捕获时场景：地形(Mat_20/LandscapeMaterialInstanceConstant) + WorldGridMaterial平面，实测 MainPass ClusterCull 82组、SW Rasterize 882组、PostPass 全部遮挡跳过。"
+  "notes": "文章基于 UE 5.7 源码，在 UE 5.7 验证关键文件路径均存在。核心论点：Nanite 通过 VisBuffer64+ShadingBinning+CS UAV 将几何/着色/调度三层 GPU 化，材质评估代码(FPixelShaderInOut_MainPS)与传统管线完全复用。勘误：文中 PSOPrecache 文件路径写作 Renderer/Private，实际在 Engine/Source/Runtime/Engine/Private/。TerrainDemo 抓帧捕获时场景：地形(Mat_20/LandscapeMaterialInstanceConstant) + WorldGridMaterial平面，实测 MainPass ClusterCull 82组、SW Rasterize 882组、PostPass 全部遮挡跳过。"
 }

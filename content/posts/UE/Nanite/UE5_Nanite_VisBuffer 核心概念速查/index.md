@@ -6,8 +6,6 @@ tags = ['UE', 'GPU', 'Nanite', 'VisBuffer']
 categories = ['图形渲染']
 +++
 
-# Nanite VisBuffer 核心概念速查
-
 Nanite 是 UE5 的虚拟化几何系统，其核心创新是用 **Visibility Buffer（可见性缓冲）** 替代传统 G-Buffer，将几何处理与材质着色完全解耦。本文梳理 VisBuffer 管线中涉及的关键概念。
 
 ## VisBuffer 整体管线

@@ -4,5 +4,6 @@ resources/
 __pycache__/
 *.pyc
 content/local/
+content/PRIVATE.md
 config/development/
 .idea/

@@ -1,0 +1,22 @@
+{
+  "rdc_files": [],
+  "code_refs": [
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Landscape/Public/Landscape.h",
+      "note": "ALandscape 主 Actor，LandscapeGuid 等核心配置"
+    },
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Landscape/Public/LandscapeProxy.h",
+      "note": "ALandscapeProxy / ALandscapeStreamingProxy 定义"
+    },
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Landscape/Public/LandscapeComponent.h",
+      "note": "ULandscapeComponent，HeightmapTexture / WeightmapTextures 持有者"
+    },
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Landscape/Private/LandscapeRender.cpp",
+      "note": "FLandscapeVertexFactory，VertexShader 参数绑定"
+    }
+  ],
+  "notes": "UE5 Landscape 层级结构速查：StreamingProxy → Component → Subsection → Quad 各级类名、尺寸、职责对照"
+}

@@ -1,0 +1,27 @@
+{
+  "rdc_files": [
+    {
+      "path": "",
+      "note": "Nanite VisBuffer 相关 RenderDoc 抓帧"
+    }
+  ],
+  "code_refs": [
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteDataDecode.ush",
+      "note": "VisBuffer 编码/解码，DecodeTriangle() 等核心函数"
+    },
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteStructs.h",
+      "note": "FVisibleCluster / FInstanceDraw 等核心结构体"
+    },
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteMaterialShader.cpp",
+      "note": "GetRasterBin() 材质分桶逻辑"
+    },
+    {
+      "path": "D:/UE5/Engine/Source/Runtime/Renderer/Private/Nanite/NaniteCullRaster.cpp",
+      "note": "GPU 裁剪与光栅化核心"
+    }
+  ],
+  "notes": "Nanite VisBuffer 核心概念速查：Cluster / Instance / Primitive / Overdraw / ShadingRate / RasterBin / Compute WPO / VisBuffer 编码格式"
+}
