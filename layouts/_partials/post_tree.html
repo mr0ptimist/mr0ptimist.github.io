@@ -1,0 +1,140 @@
+{{- /* post_tree.html — recursive section tree renderer */ -}}
+{{- $section   := .section -}}
+{{- $depth     := .depth | default 0 -}}
+{{- $root      := .root | default false -}}
+{{- $sortMode  := .sortMode | default "date" -}}
+{{- $sortDir   := .sortDir | default "desc" -}}
+{{- $openDepth := .openDepth | default 2 -}}
+
+{{- $subSections := $section.Sections -}}
+
+{{- /* Filter to only direct child pages (not pages inside sub-sections) */ -}}
+{{- $directPages := slice -}}
+{{- if $section.File -}}
+  {{- $sectionDir := replace $section.File.Dir "\\" "/" -}}
+  {{- range $section.RegularPages -}}
+    {{- $norm := replace .File.Dir "\\" "/" -}}
+    {{- $rel := strings.TrimPrefix $sectionDir $norm -}}
+    {{- $rel = strings.TrimSuffix "/" $rel -}}
+    {{- if not (in $rel "/") -}}
+      {{- $directPages = $directPages | append . -}}
+    {{- end -}}
+  {{- end -}}
+{{- else -}}
+  {{- /* Root section (posts/) — .File may be nil; use path prefix approach */ -}}
+  {{- $prefix := "posts/" -}}
+  {{- range $section.RegularPages -}}
+    {{- $norm := replace .File.Dir "\\" "/" -}}
+    {{- $rel := strings.TrimPrefix $prefix $norm -}}
+    {{- $rel = strings.TrimSuffix "/" $rel -}}
+    {{- if not (in $rel "/") -}}
+      {{- $directPages = $directPages | append . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Sort pages by selected mode */ -}}
+{{- if eq $sortMode "name" -}}
+  {{- if eq $sortDir "asc" -}}
+    {{- $directPages = sort $directPages "Title" "asc" -}}
+  {{- else -}}
+    {{- $directPages = sort $directPages "Title" "desc" -}}
+  {{- end -}}
+{{- else if eq $sortMode "lastmod" -}}
+  {{- if eq $sortDir "asc" -}}
+    {{- $directPages = sort $directPages "Lastmod" "asc" -}}
+  {{- else -}}
+    {{- $directPages = sort $directPages "Lastmod" "desc" -}}
+  {{- end -}}
+{{- else -}}
+  {{- /* date */ -}}
+  {{- if eq $sortDir "asc" -}}
+    {{- $directPages = sort $directPages "Date" "asc" -}}
+  {{- else -}}
+    {{- $directPages = sort $directPages "Date" "desc" -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* Sort sub-sections consistently */ -}}
+{{- if eq $sortMode "name" -}}
+  {{- if eq $sortDir "asc" -}}
+    {{- $subSections = sort $subSections "LinkTitle" "asc" -}}
+  {{- else -}}
+    {{- $subSections = sort $subSections "LinkTitle" "desc" -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $hasContent := or (gt (len $subSections) 0) (gt (len $directPages) 0) -}}
+{{- if not $hasContent -}}
+  {{- return -}}
+{{- end -}}
+
+<ul class="ptree-list{{ if $root }} ptree-root{{ end }}{{ if ge $depth 2 }} ptree-deep{{ end }}">
+  {{- range $subSections -}}
+    {{- $childCount := len .Pages -}}
+    {{- if gt $childCount 0 -}}
+    {{- $shouldOpen := lt $depth $openDepth -}}
+    <li class="ptree-folder" style="--ptree-depth: {{ $depth }}">
+      <details class="ptree-details"{{ if $shouldOpen }} open{{ end }}>
+        <summary class="ptree-summary">
+          <span class="ptree-icon"></span>
+          <span class="ptree-name">{{- .LinkTitle | default .Title | default (path.Base .File.Dir) -}}</span>
+          <span class="ptree-count">{{ $childCount }}</span>
+        </summary>
+        <div class="ptree-children">
+          {{- partial "post_tree.html" (dict
+            "section" .
+            "depth" (add $depth 1)
+            "sortMode" $sortMode
+            "sortDir" $sortDir
+            "openDepth" $openDepth
+          ) -}}
+        </div>
+      </details>
+    </li>
+    {{- end -}}
+  {{- end -}}
+
+  {{- range $directPages -}}
+    {{- $isDraft := .Draft -}}
+
+    {{- /* Extract first image for thumbnail */ -}}
+    {{- $thumbUrl := "" -}}
+    {{- $firstImg := findRE `!\[[^\]]*\]\([^)]+\.(dds|exr|png|jpg|jpeg|webp)\)` .RawContent 1 -}}
+    {{- if $firstImg -}}
+      {{- $full := index $firstImg 0 -}}
+      {{- $thumb := replaceRE `.*\]\(([^)\s"]+).*` "$1" $full -}}
+      {{- if or (hasPrefix $thumb "http") (hasPrefix $thumb "/") -}}
+        {{- $thumbUrl = $thumb -}}
+      {{- else -}}
+        {{- $thumbUrl = printf "%s%s" .RelPermalink $thumb -}}
+      {{- end -}}
+    {{- end -}}
+
+    <li class="ptree-article{{ if $isDraft }} ptree-draft{{ end }}{{ if $thumbUrl }} ptree-has-thumb{{ end }}" style="--ptree-depth: {{ $depth }}">
+      <a href="{{ .RelPermalink }}" class="ptree-link">
+        <span class="ptree-bullet"></span>
+        {{- if $thumbUrl -}}
+        <span class="ptree-thumb entry-thumb"><img alt="" loading="lazy" src="{{ $thumbUrl | safeURL }}"></span>
+        {{- end -}}
+        <span class="ptree-title">
+          {{- .Title -}}
+          {{- if $isDraft -}}
+          <span class="ptree-draft-badge" title="Draft">DRAFT</span>
+          {{- end -}}
+        </span>
+        <span class="ptree-meta">
+          {{- if not .Date.IsZero -}}
+          <span class="ptree-date">{{ .Date.Format "2006-01-02" }}</span>
+          {{- end -}}
+          {{- $wc := countrunes .Plain -}}
+          {{- if ge $wc 100 -}}
+          <span class="ptree-wc">{{ printf "%.1fk字" (div (float $wc) 1000) }}</span>
+          {{- else if gt $wc 0 -}}
+          <span class="ptree-wc">{{ printf "%d字" $wc }}</span>
+          {{- end -}}
+        </span>
+      </a>
+    </li>
+  {{- end -}}
+</ul>

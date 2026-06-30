@@ -60,100 +60,100 @@
 {{- partial "home_info.html" . }}
 {{- end }}
 
-{{- $term := .Data.Term }}
-{{- range $index, $page := $paginator.Pages }}
+{{- $isPostsSection := and (eq .Kind "section") (eq .Type "posts") -}}
 
-{{- $isHidden := .Params.hidden }}
-{{- $class := "post-entry" }}
-
-{{- $user_preferred := or site.Params.disableSpecial1stPost site.Params.homeInfoParams }}
-{{- if (and $.IsHome (eq $paginator.PageNumber 1) (eq $index 0) (not $user_preferred)) }}
-{{- $class = "first-entry" }}
-{{- else if $term }}
-{{- $class = "post-entry tag-entry" }}
-{{- end }}
-
-<article class="{{ $class }}"{{ if $isHidden }} style="display:none"{{ end }}
-  data-sort-date="{{ .Date.Format "2006-01-02" }}"
-  data-sort-lastmod="{{ if and .File (eq .Kind "page") }}{{ (os.Stat (printf "content/%s" .File.Path)).ModTime.Format "2006-01-02" }}{{ else }}{{ .Date.Format "2006-01-02" }}{{ end }}"
-  data-sort-title="{{ .Title | plainify }}">
-  {{- $coverHidden := (.Param "cover.hiddenInList") | default (.Param "cover.hidden") | default false }}
-  {{- partial "cover.html" (dict "cxt" . "IsSingle" false "isHidden" $coverHidden) }}
-  <header class="entry-header">
-    <h2 class="entry-hint-parent">
-      {{- .Title }}
-      {{- if .Draft }}
-      <span class="entry-hint" title="Draft">
-        <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" fill="currentColor">
-          <path
-            d="M160-410v-60h300v60H160Zm0-165v-60h470v60H160Zm0-165v-60h470v60H160Zm360 580v-123l221-220q9-9 20-13t22-4q12 0 23 4.5t20 13.5l37 37q9 9 13 20t4 22q0 11-4.5 22.5T862.09-380L643-160H520Zm300-263-37-37 37 37ZM580-220h38l121-122-18-19-19-18-122 121v38Zm141-141-19-18 37 37-18-19Z" />
-        </svg>
-      </span>
-      {{- end }}
-    </h2>
-  </header>
-  {{- if (ne (.Param "hideSummary") true) }}
-  <div class="entry-content">
-    <p>{{ .Summary | plainify | htmlUnescape }}{{ if .Truncated }}...{{ end }}</p>
+{{- if $isPostsSection }}
+  {{- /* ── Tree view for /posts/ ── */ -}}
+  <div class="post-tree-wrap">
+    {{- partial "post_tree.html" (dict "section" . "root" true "depth" 0 "sortMode" "date" "sortDir" "desc" "openDepth" 2) }}
   </div>
+{{- else }}
+  {{- /* ── Flat view for tag/term/other pages ── */ -}}
+  {{- $term := .Data.Term }}
+  {{- range $index, $page := $paginator.Pages }}
+
+  {{- $class := "post-entry" }}
+
+  {{- $user_preferred := or site.Params.disableSpecial1stPost site.Params.homeInfoParams }}
+  {{- if (and $.IsHome (eq $paginator.PageNumber 1) (eq $index 0) (not $user_preferred)) }}
+  {{- $class = "first-entry" }}
+  {{- else if $term }}
+  {{- $class = "post-entry tag-entry" }}
   {{- end }}
-  {{- if not (.Param "hideMeta") }}
-  <footer class="entry-footer">
-    {{- partial "post_meta.html" . -}}
+
+  <article class="{{ $class }}"
+    data-sort-date="{{ .Date.Format "2006-01-02" }}"
+    data-sort-lastmod="{{ if and .File (eq .Kind "page") }}{{ (os.Stat (printf "content/%s" .File.Path)).ModTime.Format "2006-01-02" }}{{ else }}{{ .Date.Format "2006-01-02" }}{{ end }}"
+    data-sort-title="{{ .Title | plainify }}">
+    {{- $coverHidden := (.Param "cover.hiddenInList") | default (.Param "cover.hidden") | default false }}
+    {{- partial "cover.html" (dict "cxt" . "IsSingle" false "isHidden" $coverHidden) }}
+    <header class="entry-header">
+      <h2 class="entry-hint-parent">
+        {{- .Title }}
+        {{- if .Draft }}
+        <span class="entry-hint" title="Draft">
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" fill="currentColor">
+            <path
+              d="M160-410v-60h300v60H160Zm0-165v-60h470v60H160Zm0-165v-60h470v60H160Zm360 580v-123l221-220q9-9 20-13t22-4q12 0 23 4.5t20 13.5l37 37q9 9 13 20t4 22q0 11-4.5 22.5T862.09-380L643-160H520Zm300-263-37-37 37 37ZM580-220h38l121-122-18-19-19-18-122 121v38Zm141-141-19-18 37 37-18-19Z" />
+          </svg>
+        </span>
+        {{- end }}
+      </h2>
+    </header>
+    {{- if (ne (.Param "hideSummary") true) }}
+    <div class="entry-content">
+      <p>{{ .Summary | plainify | htmlUnescape }}{{ if .Truncated }}...{{ end }}</p>
+    </div>
+    {{- end }}
+    {{- if not (.Param "hideMeta") }}
+    <footer class="entry-footer">
+      {{- partial "post_meta.html" . -}}
+    </footer>
+    {{- end }}
+    <a class="entry-link" aria-label="post link to {{ .Title | plainify }}" href="{{ .RelPermalink }}"></a>
+  </article>
+  {{- end }}
+
+  {{- if gt $paginator.TotalPages 1 }}
+  <footer class="page-footer">
+    <nav class="pagination">
+      {{- if $paginator.HasPrev }}
+      <a class="prev" href="{{ $paginator.Prev.URL | relURL }}">
+        «&nbsp;{{ i18n "prev_page" }}&nbsp;
+        {{- if (.Param "ShowPageNums") }}
+        {{- sub $paginator.PageNumber 1 }}/{{ $paginator.TotalPages }}
+        {{- end }}
+      </a>
+      {{- end }}
+      {{- if $paginator.HasNext }}
+      <a class="next" href="{{ $paginator.Next.URL | relURL }}">
+        {{- i18n "next_page" }}&nbsp;
+        {{- if (.Param "ShowPageNums") }}
+        {{- add 1 $paginator.PageNumber }}/{{ $paginator.TotalPages }}
+        {{- end }}&nbsp;»
+      </a>
+      {{- end }}
+    </nav>
   </footer>
   {{- end }}
-  <a class="entry-link" aria-label="post link to {{ .Title | plainify }}" href="{{ .RelPermalink }}"></a>
-</article>
-{{- end }}
-
-{{- if gt $paginator.TotalPages 1 }}
-<footer class="page-footer">
-  <nav class="pagination">
-    {{- if $paginator.HasPrev }}
-    <a class="prev" href="{{ $paginator.Prev.URL | relURL }}">
-      «&nbsp;{{ i18n "prev_page" }}&nbsp;
-      {{- if (.Param "ShowPageNums") }}
-      {{- sub $paginator.PageNumber 1 }}/{{ $paginator.TotalPages }}
-      {{- end }}
-    </a>
-    {{- end }}
-    {{- if $paginator.HasNext }}
-    <a class="next" href="{{ $paginator.Next.URL | relURL }}">
-      {{- i18n "next_page" }}&nbsp;
-      {{- if (.Param "ShowPageNums") }}
-      {{- add 1 $paginator.PageNumber }}/{{ $paginator.TotalPages }}
-      {{- end }}&nbsp;»
-    </a>
-    {{- end }}
-  </nav>
-</footer>
 {{- end }}
 
 <script>
 (function(){
   var bar = document.querySelector('.sort-bar');
   if (!bar) return;
-  var list = bar.parentElement;
   var btns = bar.querySelectorAll('.sort-btn');
   var STORAGE_KEY = 'blog_list_sort';
   var defaults = { name: 'asc', date: 'desc', lastmod: 'desc' };
   var labels   = { name: '按名称', date: '按日期', lastmod: '按修改日期' };
 
-  function getArticles() {
-    return Array.from(list.querySelectorAll('article[data-sort-date]'));
-  }
+  /* ── Detect tree mode ── */
+  var treeWrap = document.querySelector('.post-tree-wrap');
+  var isTree = !!treeWrap;
 
-  function sortAndReorder(mode, dir) {
-    var articles = getArticles();
-    articles.sort(function(a, b) {
-      var cmp;
-      if (mode === 'name')         cmp = a.dataset.sortTitle.localeCompare(b.dataset.sortTitle);
-      else if (mode === 'lastmod') cmp = a.dataset.sortLastmod.localeCompare(b.dataset.sortLastmod);
-      else                         cmp = a.dataset.sortDate.localeCompare(b.dataset.sortDate);
-      return dir === 'asc' ? cmp : -cmp;
-    });
-    var ref = bar.nextElementSibling;
-    articles.forEach(function(el) { list.insertBefore(el, ref); });
+  function formatChineseDate(s) {
+    var p = s.split('-');
+    return p[0] + '年' + parseInt(p[1]) + '月' + parseInt(p[2]) + '日';
   }
 
   function updateBtns(mode, dir) {
@@ -164,19 +164,85 @@
     });
   }
 
-  function formatChineseDate(s) {
-    var p = s.split('-');
-    return p[0] + '年' + parseInt(p[1]) + '月' + parseInt(p[2]) + '日';
+  /* ── Flat mode helpers ── */
+  function getFlatArticles() {
+    return Array.from(document.querySelectorAll('.post-entry'));
   }
 
-  function updateDates(mode) {
-    getArticles().forEach(function(el) {
-      var span = el.querySelector('.entry-date');
-      if (!span) return;
-      span.textContent = formatChineseDate(mode === 'lastmod' ? el.dataset.sortLastmod : el.dataset.sortDate);
+  function sortFlatArticles(mode, dir) {
+    var articles = getFlatArticles();
+    articles.sort(function(a, b) {
+      var cmp;
+      if (mode === 'name')    cmp = (a.dataset.sortTitle || '').localeCompare(b.dataset.sortTitle || '');
+      else if (mode === 'lastmod') cmp = (a.dataset.sortLastmod || '').localeCompare(b.dataset.sortLastmod || '');
+      else                    cmp = (a.dataset.sortDate || '').localeCompare(b.dataset.sortDate || '');
+      return dir === 'asc' ? cmp : -cmp;
+    });
+    var ref = bar.nextElementSibling;
+    articles.forEach(function(el) {
+      el.parentNode.insertBefore(el, ref);
     });
   }
 
+  function updateFlatDates(mode) {
+    getFlatArticles().forEach(function(el) {
+      var span = el.querySelector('.entry-date');
+      if (!span) return;
+      var val = mode === 'lastmod' ? el.dataset.sortLastmod : el.dataset.sortDate;
+      if (val) span.textContent = formatChineseDate(val);
+    });
+  }
+
+  /* ── Tree mode helpers ── */
+  function getTreeArticles(folderEl) {
+    var root = folderEl || treeWrap;
+    return Array.from(root.querySelectorAll('.ptree-article'));
+  }
+
+  function sortTreeArticles(container, mode, dir) {
+    var articles = getTreeArticles(container);
+    articles.sort(function(a, b) {
+      var linkA = a.querySelector('.ptree-link');
+      var linkB = b.querySelector('.ptree-link');
+      var titleA = (linkA ? linkA.querySelector('.ptree-title') : null);
+      var titleB = (linkB ? linkB.querySelector('.ptree-title') : null);
+      var dateA  = (linkA ? linkA.querySelector('.ptree-date') : null);
+      var dateB  = (linkB ? linkB.querySelector('.ptree-date') : null);
+      var cmp;
+      if (mode === 'name')    cmp = (titleA ? titleA.textContent : '').localeCompare(titleB ? titleB.textContent : '');
+      else if (mode === 'lastmod') cmp = (dateA ? dateA.textContent : '').localeCompare(dateB ? dateB.textContent : '');
+      else                    cmp = (dateA ? dateA.textContent : '').localeCompare(dateB ? dateB.textContent : '');
+      return dir === 'asc' ? cmp : -cmp;
+    });
+    /* Reorder within the list */
+    var list = null;
+    if (articles.length) list = articles[0].parentNode;
+    if (!list) return;
+    var ref = null;
+    /* Find reference: first non-article element after the article group, or end of list */
+    for (var i = 0; i < list.children.length; i++) {
+      if (!list.children[i].classList.contains('ptree-article')) {
+        if (articles.indexOf(list.children[i]) === -1) { ref = list.children[i]; break; }
+      }
+    }
+    articles.forEach(function(el) { list.insertBefore(el, ref); });
+  }
+
+  function sortAllTreeArticles(mode, dir) {
+    /* Sort articles in the root list and inside each open folder */
+    var lists = treeWrap.querySelectorAll('.ptree-list');
+    for (var i = 0; i < lists.length; i++) {
+      sortTreeArticles(lists[i], mode, dir);
+    }
+  }
+
+  function updateTreeDates(mode) {
+    /* Tree dates are statically rendered; for simplicity, we don't swap dates in tree mode.
+       The sort is visual only — articles reorder but dates stay as-rendered.
+       Users can understand the sort direction from the button state. */
+  }
+
+  /* ── Init ── */
   var savedRaw = sessionStorage.getItem(STORAGE_KEY) || 'date_desc';
   var parts = savedRaw.split('_');
   var curMode = (parts[0] in defaults) ? parts[0] : 'date';
@@ -188,15 +254,24 @@
       curDir  = (mode === curMode) ? (curDir === 'asc' ? 'desc' : 'asc') : defaults[mode];
       curMode = mode;
       sessionStorage.setItem(STORAGE_KEY, curMode + '_' + curDir);
-      sortAndReorder(curMode, curDir);
-      updateDates(curMode);
+      if (isTree) {
+        sortAllTreeArticles(curMode, curDir);
+        updateTreeDates(curMode);
+      } else {
+        sortFlatArticles(curMode, curDir);
+        updateFlatDates(curMode);
+      }
       updateBtns(curMode, curDir);
     });
   });
 
   updateBtns(curMode, curDir);
-  if (!(curMode === 'date' && curDir === 'desc')) sortAndReorder(curMode, curDir);
-  updateDates(curMode);
+  if (isTree) {
+    if (!(curMode === 'date' && curDir === 'desc')) sortAllTreeArticles(curMode, curDir);
+  } else {
+    if (!(curMode === 'date' && curDir === 'desc')) sortFlatArticles(curMode, curDir);
+    updateFlatDates(curMode);
+  }
 })();
 </script>
 

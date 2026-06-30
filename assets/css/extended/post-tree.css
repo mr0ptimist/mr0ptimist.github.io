@@ -1,0 +1,412 @@
+/* ============================================================
+   Post Tree — Blueprint Explorer
+   Technical schematic aesthetic for folder/article hierarchy
+   ============================================================ */
+
+/* --- Root container --- */
+.post-tree-wrap {
+  position: relative;
+  margin: 0 0 2em 0;
+  padding: 1.2em 0 1.2em 0.8em;
+  border-radius: 6px;
+  /* Subtle dot-grid background — blueprint paper */
+  background-image: radial-gradient(circle, var(--border) 0.5px, transparent 0.5px);
+  background-size: 16px 16px;
+  background-position: -8px -8px;
+}
+[data-theme="dark"] .post-tree-wrap {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.04) 0.5px, transparent 0.5px);
+}
+
+/* --- Tree list reset --- */
+.ptree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* --- Root-level: no left offset --- */
+.ptree-root {
+  padding-left: 0;
+}
+
+/* --- Folder item --- */
+.ptree-folder {
+  margin: 0;
+  padding: 0;
+}
+
+/* --- <details> element --- */
+.ptree-details {
+  padding: 0;
+  margin: 2px 0;
+  border: none;
+  overflow: visible;
+}
+.ptree-details[open] > .ptree-children {
+  animation: ptree-reveal 0.25s ease;
+}
+
+@keyframes ptree-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Folder summary (clickable header) --- */
+.ptree-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px 7px 10px;
+  margin: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  font-weight: 600;
+  font-size: 0.92em;
+  color: var(--primary);
+  transition: background 0.15s, color 0.15s;
+  /* Left accent based on depth */
+  border-left: 3px solid transparent;
+  position: relative;
+}
+.ptree-summary::-webkit-details-marker { display: none; }
+.ptree-summary::marker { content: ""; }
+
+.ptree-summary:hover {
+  background: var(--code-bg);
+}
+.ptree-summary:active {
+  background: var(--border);
+}
+
+/* Depth-specific left accent colors — blueprint ink */
+.ptree-folder[style*="--ptree-depth: 0"] > .ptree-details > .ptree-summary {
+  border-left-color: #4a9eff;
+}
+.ptree-folder[style*="--ptree-depth: 1"] > .ptree-details > .ptree-summary {
+  border-left-color: #5cb85c;
+}
+.ptree-folder[style*="--ptree-depth: 2"] > .ptree-details > .ptree-summary {
+  border-left-color: #f0ad4e;
+}
+
+/* --- Folder icon (rotating triangle) --- */
+.ptree-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  position: relative;
+  transition: transform 0.2s ease;
+}
+.ptree-icon::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(0deg);
+  width: 0;
+  height: 0;
+  border-left: 4px solid var(--primary);
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  opacity: 0.5;
+  transition: transform 0.2s ease, opacity 0.15s;
+}
+.ptree-details[open] > .ptree-summary .ptree-icon::before {
+  transform: translate(-50%, -50%) rotate(90deg);
+  opacity: 0.9;
+}
+.ptree-summary:hover .ptree-icon::before {
+  opacity: 0.9;
+}
+
+/* --- Folder name --- */
+.ptree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Article count badge --- */
+.ptree-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4em;
+  height: 1.4em;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 0.7em;
+  font-weight: 500;
+  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  background: var(--code-bg);
+  color: var(--secondary);
+  flex-shrink: 0;
+}
+.ptree-details[open] > .ptree-summary .ptree-count {
+  background: var(--border);
+  color: var(--primary);
+}
+
+/* --- Children container --- */
+.ptree-children {
+  padding-left: 18px;
+  /* Connecting vertical line along the left edge */
+  border-left: 1px solid var(--border);
+  margin-left: 14px;
+  position: relative;
+}
+.ptree-children::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 0;
+  width: 12px;
+  height: 1px;
+  background: var(--border);
+}
+
+/* --- Article row --- */
+.ptree-article {
+  margin: 1px 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* --- Article link --- */
+.ptree-link {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--primary);
+  transition: background 0.15s, border-color 0.15s;
+  border-left: 2px solid transparent;
+  position: relative;
+}
+.ptree-link:hover {
+  background: var(--code-bg);
+  border-left-color: var(--accent);
+  text-decoration: none;
+}
+.ptree-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* --- Decorative bullet --- */
+.ptree-bullet {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--tertiary);
+  flex-shrink: 0;
+  margin-top: 0.55em;
+  transition: background 0.15s, transform 0.15s;
+}
+.ptree-link:hover .ptree-bullet {
+  background: var(--accent);
+  transform: scale(1.6);
+}
+
+/* --- Article title --- */
+.ptree-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+/* --- Metadata row (date + word count) --- */
+.ptree-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  font-size: 0.75em;
+  color: var(--secondary);
+  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+}
+
+.ptree-date {
+  white-space: nowrap;
+}
+
+.ptree-wc {
+  white-space: nowrap;
+  opacity: 0.6;
+}
+
+/* --- Draft badge --- */
+.ptree-draft {
+  opacity: 0.7;
+}
+.ptree-draft-badge {
+  display: inline-block;
+  font-size: 0.55em;
+  vertical-align: middle;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: var(--code-bg);
+  color: var(--secondary);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* --- Deep nesting (3+ levels) — tighter spacing --- */
+.ptree-deep .ptree-summary {
+  font-size: 0.85em;
+  padding: 5px 10px;
+}
+.ptree-deep .ptree-link {
+  padding: 3px 10px;
+  font-size: 0.88em;
+}
+.ptree-deep .ptree-meta {
+  font-size: 0.7em;
+  gap: 6px;
+}
+
+/* --- Responsive: collapse meta on narrow screens --- */
+@media (max-width: 640px) {
+  .post-tree-wrap {
+    padding: 0.8em 0 0.8em 0.4em;
+  }
+  .ptree-children {
+    padding-left: 10px;
+    margin-left: 8px;
+  }
+  .ptree-meta {
+    gap: 4px;
+    font-size: 0.68em;
+  }
+  .ptree-wc {
+    display: none;
+  }
+  .ptree-title {
+    font-size: 0.84em;
+  }
+}
+
+/* --- Hover: subtle row highlight with depth-aware glow --- */
+.ptree-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.ptree-link:hover::after {
+  opacity: 0.04;
+  background: var(--accent);
+}
+
+/* --- Section count tooltip --- */
+.ptree-count {
+  position: relative;
+}
+.ptree-count:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  white-space: nowrap;
+  background: var(--primary);
+  color: var(--theme);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ============================================================
+   Thumbnail preview in tree articles
+   ============================================================ */
+
+/* --- Article row height adjusts for thumbnail --- */
+.ptree-has-thumb .ptree-link {
+  align-items: center;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  min-height: 52px;
+}
+
+/* --- Thumbnail wrapper --- */
+.ptree-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ptree-link:hover .ptree-thumb {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(74, 158, 255, 0.15);
+}
+
+/* --- Thumbnail image / canvas --- */
+.ptree-thumb img,
+.ptree-thumb canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 3px;
+}
+
+/* --- Bullet is hidden when thumbnail is present --- */
+.ptree-has-thumb .ptree-bullet {
+  display: none;
+}
+
+/* --- Entry thumb (legacy flat-list thumbnails) also work in tree --- */
+.ptree-article .entry-thumb {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 4px;
+}
+.ptree-article .entry-thumb img,
+.ptree-article .entry-thumb canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* --- Responsive: smaller thumbs on narrow screens --- */
+@media (max-width: 640px) {
+  .ptree-thumb {
+    width: 32px;
+    height: 32px;
+    border-radius: 3px;
+  }
+  .ptree-has-thumb .ptree-link {
+    min-height: 40px;
+    gap: 6px;
+  }
+}

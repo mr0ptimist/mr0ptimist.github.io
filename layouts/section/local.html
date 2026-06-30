@@ -22,122 +22,128 @@
 </div>
 {{- end }}
 
-{{- $pages := union .RegularPages .Sections }}
-{{- $paginator := .Paginate $pages }}
+{{- $isLocalSection := and (eq .Kind "section") (eq .Type "local") -}}
 
-{{- if gt $paginator.TotalPages 0 }}
-<div class="sort-bar" style="display:flex;align-items:center;gap:6px;margin-bottom:12px;font-size:13px;color:var(--content);user-select:none">
-  <span style="opacity:0.6">排序：</span>
-  <button class="sort-btn active" data-sort="name" style="padding:2px 10px;border:1px solid var(--border);border-radius:12px;background:var(--theme);color:var(--content);cursor:pointer;font-size:12px">按名称 ↑</button>
-  <button class="sort-btn" data-sort="date" style="padding:2px 10px;border:1px solid var(--border);border-radius:12px;background:var(--theme);color:var(--content);cursor:pointer;font-size:12px">按日期 ↓</button>
-  <button class="sort-btn" data-sort="lastmod" style="padding:2px 10px;border:1px solid var(--border);border-radius:12px;background:var(--theme);color:var(--content);cursor:pointer;font-size:12px">按修改日期 ↓</button>
-</div>
-{{- end }}
-
-{{- $term := .Data.Term }}
-<div class="local-list">
-{{- range $index, $page := $paginator.Pages }}
-
-{{- $isHidden := .Params.hidden }}
-{{- $class := "post-entry" }}
-
-{{- $user_preferred := or site.Params.disableSpecial1stPost site.Params.homeInfoParams }}
-{{- if (and $.IsHome (eq $paginator.PageNumber 1) (eq $index 0) (not $user_preferred)) }}
-{{- $class = "first-entry" }}
-{{- else if $term }}
-{{- $class = "post-entry tag-entry" }}
-{{- end }}
-
-{{- /* Extract first image before article tag */}}
-{{- $firstImg := findRE `!\[[^\]]*\]\([^)]+\.(dds|exr)\)` .RawContent 1 }}
-{{- $thumbUrl := "" }}
-{{- if $firstImg }}
-  {{- $full := index $firstImg 0 }}
-  {{- $thumb := replaceRE `.*\]\(([^)]+)\).*` "$1" $full }}
-  {{- $thumbUrl = $thumb }}
-  {{- if not (hasPrefix $thumb "/") }}
-    {{- $thumbUrl = printf "%s%s" .RelPermalink $thumb }}
-  {{- end }}
-{{- end }}
-
-<article class="{{ $class }}"
-  {{- if $thumbUrl }} style="display:grid;grid-template-columns:100px 1fr;gap:14px;align-items:center{{ if $isHidden }};display:none{{ end }}"{{ else if $isHidden }} style="display:none"{{ end }}
-  data-sort-date="{{ .Date.Format "2006-01-02" }}"
-  data-sort-lastmod="{{ if and .File (eq .Kind "page") }}{{ (os.Stat (printf "content/%s" .File.Path)).ModTime.Format "2006-01-02" }}{{ else }}{{ .Date.Format "2006-01-02" }}{{ end }}"
-  data-sort-title="{{ .Title | plainify }}">
-  {{- $coverHidden := (.Param "cover.hiddenInList") | default (.Param "cover.hidden") | default false }}
-  {{- partial "cover.html" (dict "cxt" . "IsSingle" false "isHidden" $coverHidden) }}
-
-  {{- if $thumbUrl }}
-  <div class="entry-thumb"><img alt="" loading="lazy" src="{{ $thumbUrl }}"></div>
+{{- if $isLocalSection }}
+  {{- /* Sort bar for tree view */ -}}
+  {{- $pages := union .RegularPages .Sections }}
+  {{- $paginator := .Paginate $pages }}
+  {{- if gt $paginator.TotalPages 0 }}
+  <div class="sort-bar" style="display:flex;align-items:center;gap:6px;margin-bottom:12px;font-size:13px;color:var(--content);user-select:none">
+    <span style="opacity:0.6">排序：</span>
+    <button class="sort-btn active" data-sort="name" style="padding:2px 10px;border:1px solid var(--border);border-radius:12px;background:var(--theme);color:var(--content);cursor:pointer;font-size:12px">按名称 ↑</button>
+    <button class="sort-btn" data-sort="date" style="padding:2px 10px;border:1px solid var(--border);border-radius:12px;background:var(--theme);color:var(--content);cursor:pointer;font-size:12px">按日期 ↓</button>
+    <button class="sort-btn" data-sort="lastmod" style="padding:2px 10px;border:1px solid var(--border);border-radius:12px;background:var(--theme);color:var(--content);cursor:pointer;font-size:12px">按修改日期 ↓</button>
+  </div>
   {{- end }}
 
-  <header class="entry-header">
-    <h2 class="entry-hint-parent">
-      {{- .Title }}
-      {{- if .Draft }}
-      <span class="entry-hint" title="Draft">
-        <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" fill="currentColor">
-          <path d="M160-410v-60h300v60H160Zm0-165v-60h470v60H160Zm0-165v-60h470v60H160Zm360 580v-123l221-220q9-9 20-13t22-4q12 0 23 4.5t20 13.5l37 37q9 9 13 20t4 22q0 11-4.5 22.5T862.09-380L643-160H520Zm300-263-37-37 37 37ZM580-220h38l121-122-18-19-19-18-122 121v38Zm141-141-19-18 37 37-18-19Z" />
-        </svg>
-      </span>
-      {{- end }}
-    </h2>
-  </header>
-  <a class="entry-link" aria-label="post link to {{ .Title | plainify }}" href="{{ .RelPermalink }}"></a>
-</article>
-{{- end }}
-</div>
+  {{- /* ── Tree view for /local/ ── */ -}}
+  <div class="post-tree-wrap">
+    {{- partial "post_tree.html" (dict "section" . "root" true "depth" 0 "sortMode" "name" "sortDir" "asc" "openDepth" 2) }}
+  </div>
 
-{{- if gt $paginator.TotalPages 1 }}
-<footer class="page-footer">
-  <nav class="pagination">
-    {{- if $paginator.HasPrev }}
-    <a class="prev" href="{{ $paginator.Prev.URL | relURL }}">
-      «&nbsp;{{ i18n "prev_page" }}&nbsp;
-      {{- if (.Param "ShowPageNums") }}
-      {{- sub $paginator.PageNumber 1 }}/{{ $paginator.TotalPages }}
+{{- else }}
+  {{- /* ── Flat view for tag/term/other pages ── */ -}}
+  {{- $pages := union .RegularPages .Sections }}
+  {{- $paginator := .Paginate $pages }}
+
+  {{- if gt $paginator.TotalPages 0 }}
+  <div class="sort-bar" style="display:flex;align-items:center;gap:6px;margin-bottom:12px;font-size:13px;color:var(--content);user-select:none">
+    <span style="opacity:0.6">排序：</span>
+    <button class="sort-btn active" data-sort="name" style="padding:2px 10px;border:1px solid var(--border);border-radius:12px;background:var(--theme);color:var(--content);cursor:pointer;font-size:12px">按名称 ↑</button>
+    <button class="sort-btn" data-sort="date" style="padding:2px 10px;border:1px solid var(--border);border-radius:12px;background:var(--theme);color:var(--content);cursor:pointer;font-size:12px">按日期 ↓</button>
+    <button class="sort-btn" data-sort="lastmod" style="padding:2px 10px;border:1px solid var(--border);border-radius:12px;background:var(--theme);color:var(--content);cursor:pointer;font-size:12px">按修改日期 ↓</button>
+  </div>
+  {{- end }}
+
+  {{- $term := .Data.Term }}
+  <div class="local-list">
+  {{- range $index, $page := $paginator.Pages }}
+
+  {{- $class := "post-entry" }}
+
+  {{- $user_preferred := or site.Params.disableSpecial1stPost site.Params.homeInfoParams }}
+  {{- if (and $.IsHome (eq $paginator.PageNumber 1) (eq $index 0) (not $user_preferred)) }}
+  {{- $class = "first-entry" }}
+  {{- else if $term }}
+  {{- $class = "post-entry tag-entry" }}
+  {{- end }}
+
+  {{- $firstImg := findRE `!\[[^\]]*\]\([^)]+\.(dds|exr)\)` .RawContent 1 }}
+  {{- $thumbUrl := "" }}
+  {{- if $firstImg }}
+    {{- $full := index $firstImg 0 }}
+    {{- $thumb := replaceRE `.*\]\(([^)\s"]+).*` "$1" $full }}
+    {{- $thumbUrl = $thumb }}
+    {{- if not (hasPrefix $thumb "/") }}
+      {{- $thumbUrl = printf "%s%s" .RelPermalink $thumb }}
+    {{- end }}
+  {{- end }}
+
+  <article class="{{ $class }}"
+    {{- if $thumbUrl }} style="display:grid;grid-template-columns:100px 1fr;gap:14px;align-items:center"{{ end }}
+    data-sort-date="{{ .Date.Format "2006-01-02" }}"
+    data-sort-lastmod="{{ if and .File (eq .Kind "page") }}{{ (os.Stat (printf "content/%s" .File.Path)).ModTime.Format "2006-01-02" }}{{ else }}{{ .Date.Format "2006-01-02" }}{{ end }}"
+    data-sort-title="{{ .Title | plainify }}">
+    {{- $coverHidden := (.Param "cover.hiddenInList") | default (.Param "cover.hidden") | default false }}
+    {{- partial "cover.html" (dict "cxt" . "IsSingle" false "isHidden" $coverHidden) }}
+
+    {{- if $thumbUrl }}
+    <div class="entry-thumb"><img alt="" loading="lazy" src="{{ $thumbUrl }}"></div>
+    {{- end }}
+
+    <header class="entry-header">
+      <h2 class="entry-hint-parent">
+        {{- .Title }}
+        {{- if .Draft }}
+        <span class="entry-hint" title="Draft">
+          <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" fill="currentColor">
+            <path d="M160-410v-60h300v60H160Zm0-165v-60h470v60H160Zm0-165v-60h470v60H160Zm360 580v-123l221-220q9-9 20-13t22-4q12 0 23 4.5t20 13.5l37 37q9 9 13 20t4 22q0 11-4.5 22.5T862.09-380L643-160H520Zm300-263-37-37 37 37ZM580-220h38l121-122-18-19-19-18-122 121v38Zm141-141-19-18 37 37-18-19Z" />
+          </svg>
+        </span>
+        {{- end }}
+      </h2>
+    </header>
+    <a class="entry-link" aria-label="post link to {{ .Title | plainify }}" href="{{ .RelPermalink }}"></a>
+  </article>
+  {{- end }}
+  </div>
+
+  {{- if gt $paginator.TotalPages 1 }}
+  <footer class="page-footer">
+    <nav class="pagination">
+      {{- if $paginator.HasPrev }}
+      <a class="prev" href="{{ $paginator.Prev.URL | relURL }}">
+        «&nbsp;{{ i18n "prev_page" }}&nbsp;
+        {{- if (.Param "ShowPageNums") }}
+        {{- sub $paginator.PageNumber 1 }}/{{ $paginator.TotalPages }}
+        {{- end }}
+      </a>
       {{- end }}
-    </a>
-    {{- end }}
-    {{- if $paginator.HasNext }}
-    <a class="next" href="{{ $paginator.Next.URL | relURL }}">
-      {{- i18n "next_page" }}&nbsp;
-      {{- if (.Param "ShowPageNums") }}
-      {{- add 1 $paginator.PageNumber }}/{{ $paginator.TotalPages }}
-      {{- end }}&nbsp;»
-    </a>
-    {{- end }}
-  </nav>
-</footer>
+      {{- if $paginator.HasNext }}
+      <a class="next" href="{{ $paginator.Next.URL | relURL }}">
+        {{- i18n "next_page" }}&nbsp;
+        {{- if (.Param "ShowPageNums") }}
+        {{- add 1 $paginator.PageNumber }}/{{ $paginator.TotalPages }}
+        {{- end }}&nbsp;»
+      </a>
+      {{- end }}
+    </nav>
+  </footer>
+  {{- end }}
 {{- end }}
 
 <script>
 (function(){
   var bar = document.querySelector('.sort-bar');
   if (!bar) return;
-  var list = bar.parentElement;
   var btns = bar.querySelectorAll('.sort-btn');
   var STORAGE_KEY = 'blog_local_sort';
   var defaults = { name: 'asc', date: 'desc', lastmod: 'desc' };
   var labels   = { name: '按名称', date: '按日期', lastmod: '按修改日期' };
 
-  function getArticles() {
-    return Array.from(list.querySelectorAll('article[data-sort-date]'));
-  }
-
-  function sortAndReorder(mode, dir) {
-    var articles = getArticles();
-    articles.sort(function(a, b) {
-      var cmp;
-      if (mode === 'name')         cmp = a.dataset.sortTitle.localeCompare(b.dataset.sortTitle);
-      else if (mode === 'lastmod') cmp = a.dataset.sortLastmod.localeCompare(b.dataset.sortLastmod);
-      else                         cmp = a.dataset.sortDate.localeCompare(b.dataset.sortDate);
-      return dir === 'asc' ? cmp : -cmp;
-    });
-    var ref = bar.nextElementSibling;
-    articles.forEach(function(el) { list.insertBefore(el, ref); });
-  }
+  var treeWrap = document.querySelector('.post-tree-wrap');
+  var isTree = !!treeWrap;
 
   function updateBtns(mode, dir) {
     btns.forEach(function(btn) {
@@ -147,17 +153,51 @@
     });
   }
 
-  function formatChineseDate(s) {
-    var p = s.split('-');
-    return p[0] + '年' + parseInt(p[1]) + '月' + parseInt(p[2]) + '日';
+  /* ── Flat sort ── */
+  function getFlatArticles() {
+    return Array.from(document.querySelectorAll('.local-list .post-entry, .post-entry[data-sort-date]'));
   }
 
-  function updateDates(mode) {
-    getArticles().forEach(function(el) {
-      var span = el.querySelector('.entry-date');
-      if (!span) return;
-      span.textContent = formatChineseDate(mode === 'lastmod' ? el.dataset.sortLastmod : el.dataset.sortDate);
+  function sortFlat(mode, dir) {
+    var articles = getFlatArticles();
+    articles.sort(function(a, b) {
+      var cmp;
+      if (mode === 'name')    cmp = (a.dataset.sortTitle || '').localeCompare(b.dataset.sortTitle || '');
+      else if (mode === 'lastmod') cmp = (a.dataset.sortLastmod || '').localeCompare(b.dataset.sortLastmod || '');
+      else                    cmp = (a.dataset.sortDate || '').localeCompare(b.dataset.sortDate || '');
+      return dir === 'asc' ? cmp : -cmp;
     });
+    var ref = bar.nextElementSibling;
+    articles.forEach(function(el) { el.parentNode.insertBefore(el, ref); });
+  }
+
+  /* ── Tree sort ── */
+  function sortTreeArticles(container, mode, dir) {
+    var articles = Array.from(container.querySelectorAll('.ptree-article'));
+    articles.sort(function(a, b) {
+      var ta = (a.querySelector('.ptree-title') || {}).textContent || '';
+      var tb = (b.querySelector('.ptree-title') || {}).textContent || '';
+      var da = (a.querySelector('.ptree-date') || {}).textContent || '';
+      var db = (b.querySelector('.ptree-date') || {}).textContent || '';
+      var cmp;
+      if (mode === 'name') cmp = ta.localeCompare(tb);
+      else cmp = da.localeCompare(db);
+      return dir === 'asc' ? cmp : -cmp;
+    });
+    if (!articles.length) return;
+    var list = articles[0].parentNode;
+    var ref = null;
+    for (var i = 0; i < list.children.length; i++) {
+      if (!list.children[i].classList.contains('ptree-article')) {
+        if (articles.indexOf(list.children[i]) === -1) { ref = list.children[i]; break; }
+      }
+    }
+    articles.forEach(function(el) { list.insertBefore(el, ref); });
+  }
+
+  function sortAllTrees(mode, dir) {
+    var lists = treeWrap.querySelectorAll('.ptree-list');
+    for (var i = 0; i < lists.length; i++) sortTreeArticles(lists[i], mode, dir);
   }
 
   var savedRaw = sessionStorage.getItem(STORAGE_KEY) || 'name_asc';
@@ -168,18 +208,18 @@
   btns.forEach(function(btn) {
     btn.addEventListener('click', function() {
       var mode = btn.dataset.sort;
-      curDir  = (mode === curMode) ? (curDir === 'asc' ? 'desc' : 'asc') : defaults[mode];
+      curDir = (mode === curMode) ? (curDir === 'asc' ? 'desc' : 'asc') : defaults[mode];
       curMode = mode;
       sessionStorage.setItem(STORAGE_KEY, curMode + '_' + curDir);
-      sortAndReorder(curMode, curDir);
-      updateDates(curMode);
+      if (isTree) sortAllTrees(curMode, curDir);
+      else sortFlat(curMode, curDir);
       updateBtns(curMode, curDir);
     });
   });
 
   updateBtns(curMode, curDir);
-  if (!(curMode === 'name' && curDir === 'asc')) sortAndReorder(curMode, curDir);
-  updateDates(curMode);
+  if (isTree && !(curMode === 'name' && curDir === 'asc')) sortAllTrees(curMode, curDir);
+  else if (!isTree && !(curMode === 'name' && curDir === 'asc')) sortFlat(curMode, curDir);
 })();
 </script>
 
