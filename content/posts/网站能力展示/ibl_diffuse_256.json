@@ -1,0 +1,12 @@
+{
+  "resource_id": "ResourceId::302",
+  "image_file": "ibl_diffuse_256.dds",
+  "event_id": 2631,
+  "source": "ai",
+  "flip_y": true,
+  "ai": {
+    "content": "IBL Diffuse LUT (256×256)",
+    "pipeline_stage": "Deferred Lighting",
+    "format_note": "BC7_UNORM"
+  }
+}

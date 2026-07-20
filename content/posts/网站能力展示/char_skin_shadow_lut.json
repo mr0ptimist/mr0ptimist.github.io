@@ -1,0 +1,13 @@
+{
+  "resource_id": "ResourceId::34793",
+  "image_file": "char_skin_shadow_lut.dds",
+  "event_id": 2860,
+  "source": "ai",
+  "flip_y": true,
+  "ai": {
+    "content": "Character Skin Shadow LUT (1024×32)",
+    "pipeline_stage": "Deferred Lighting",
+    "format_note": "BC7_SRGB",
+    "variant": "Skin"
+  }
+}

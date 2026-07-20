@@ -1,0 +1,10 @@
+{
+  "code_refs": [
+    {"path": "D:/GithubIO/static/js/", "note": "所有静态 JS 文件：DDS/EXR 解析器、图像查看器、GPU 图、颜色重映射"},
+    {"path": "D:/GithubIO/layouts/shortcodes/", "note": "自定义短代码：drawio、gpugraph、gputrace"},
+    {"path": "D:/GithubIO/layouts/_partials/", "note": "自定义 Partial：header、footer、post_tree、extend_head"},
+    {"path": "D:/GithubIO/assets/css/extended/", "note": "自定义 CSS：通道查看器、折叠区块、树形视图、GPU 图等"}
+  ],
+  "rdc_files": [],
+  "notes": "本文档是本站所有技术能力的完整目录。写新文章时参考本文档以了解可用的短代码、图片格式、图表类型等能力。所有列出的能力均已实装可用。"
+}

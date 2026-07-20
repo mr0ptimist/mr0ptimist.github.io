@@ -1,0 +1,18 @@
+{
+  "resource_id": "ResourceId::630",
+  "image_file": "ResourceId-630.exr",
+  "file_type": "exr",
+  "event_id": 28,
+  "source": "ai",
+  "mip": 0,
+  "renderdoc": {
+    "format": "R11G11B10_FLOAT",
+    "size": "256x64",
+    "mips": 1,
+    "array_size": 1
+  },
+  "ai": {
+    "content": "LUT: Color Gradient 256x64, R11G11B10_FLOAT",
+    "pipeline_stage": "Phase 1: LUT Pre-compute"
+  }
+}

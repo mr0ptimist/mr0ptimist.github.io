@@ -1,0 +1,18 @@
+{
+  "resource_id": "ResourceId::15373",
+  "image_file": "ResourceId-15373.dds",
+  "file_type": "dds",
+  "event_id": 128,
+  "source": "ai",
+  "mip": 0,
+  "renderdoc": {
+    "format": "R16G16_UNORM",
+    "size": "256x256",
+    "mips": 1,
+    "array_size": 1
+  },
+  "ai": {
+    "content": "Small Shadow Map 256x256, R16G16_UNORM",
+    "pipeline_stage": "Phase 1: Shadow Map"
+  }
+}

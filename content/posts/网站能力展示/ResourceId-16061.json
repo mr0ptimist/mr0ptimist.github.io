@@ -1,0 +1,18 @@
+{
+  "resource_id": "ResourceId::16061",
+  "image_file": "ResourceId-16061.dds",
+  "file_type": "dds",
+  "event_id": 2631,
+  "source": "ai",
+  "mip": 8,
+  "renderdoc": {
+    "format": "BC6_UFLOAT",
+    "size": "128x128",
+    "mips": 8,
+    "array_size": 6
+  },
+  "ai": {
+    "content": "IBL Cubemap (6 faces), BC6_UFLOAT 128x128x8 mips x6 faces",
+    "pipeline_stage": "Phase 4: Deferred Lighting Input"
+  }
+}

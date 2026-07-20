@@ -86,14 +86,30 @@ content/posts/{文章名}/
 
 ## Mermaid 图表规范（兼容 11.x）
 
-**写法规则**：
+### 写法规则
+
 - 直接用 `<<interface>>`，无需手动转义（JS 自动修复）
 - flowchart 节点标签含 `()` `,` `:` `@` `→` `×` `+` `=` 等**必须**用 `["..."]` 包裹，否则 Syntax error
-- 验证：`npx @mermaid-js/mermaid-cli -i file.mmd -o out.png`
+- **禁止在节点标签中用 HTML 实体**（`&lt;` `&gt;` `&amp;` 等）——浏览器 HTML 解析器会在 JS 修复之前先把它们转成 DOM 元素吃掉，导致标签内容残缺。此问题 JS 修复逻辑无法覆盖，只能用纯文本
+- classDiagram 方法签名避免嵌套 `()`：用 `+processImage()` 不要用 `+processImage(img)`；参数说明放在注释或正文中
+- classDiagram 关系标签避免 `/`（会被解析为换行符）
+- 验证：`npx --yes @mermaid-js/mermaid-cli@11.16.0 -i file.mmd -o out.png`（建议全局装好 `npm install -g @mermaid-js/mermaid-cli@11.16.0`，npx 每次下载很慢）
 
-**Dark Reader 兼容**：所有 flowchart 节点必须用 `classDef` 指定 `fill` 和 `color`（mermaid 加 `!important`，Dark Reader 无法覆盖）。不要用 `<style>` 注入或 Shadow DOM。
+### 跨图类型语法差异（重要）
 
-**标准配色方案**：
+| 特性 | flowchart | classDiagram |
+|------|-----------|-------------|
+| `classDef` / `class` | ✅ 支持 | ❌ **不支持**，会报 Syntax error |
+| 节点样式方式 | `classDef name fill:...` + `class nodeList name` | 无需额外样式或使用 `cssClass` / `:::styleClass` |
+| 节点形状 | `[...]` `(...)` `{...}` `((...))` 等 | 固定矩形（class box） |
+
+**常见踩坑**：给 classDiagram 加了 `classDef` 和 `class` 试图配色 → Mermaid 11.x 直接 Syntax error。classDiagram 不需要 classDef，默认渲染即可。
+
+### Dark Reader 兼容
+
+所有 **flowchart** 节点必须用 `classDef` 指定 `fill` 和 `color`（mermaid 加 `!important`，Dark Reader 无法覆盖）。不要用 `<style>` 注入或 Shadow DOM。
+
+### 标准配色方案
 
 | class | fill | 用途 |
 |-------|------|------|
@@ -105,6 +121,8 @@ content/posts/{文章名}/
 | `out` | `#f3e5f5` | 最终结果 |
 
 每个 classDef 都必须带 `color:#000`，例如 `classDef proc fill:#e1f5fe,color:#000`。
+
+> ⚠️ `data`、`out` 等类名在 Mermaid 11.16.0 中可能触发保留字冲突，建议用 `io` 替代 `data`、`result` 替代 `out`。
 
 ## 文章分组（Section 文件夹）
 

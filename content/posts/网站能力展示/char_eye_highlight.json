@@ -1,0 +1,13 @@
+{
+  "resource_id": "ResourceId::35620",
+  "image_file": "char_eye_highlight.dds",
+  "event_id": 2756,
+  "source": "ai",
+  "flip_y": true,
+  "ai": {
+    "content": "Character Eye Highlight/MatCap (256×256)",
+    "pipeline_stage": "Deferred Lighting",
+    "format_note": "BC7_SRGB",
+    "variant": "Eye"
+  }
+}
