@@ -28,9 +28,15 @@ Hugo 版本：0.160.1 extended。
   - 文章宽度 / TOC 宽度可拖拽滑块调整
   - TOC 自动过滤深层标题、高亮当前激活章节
 - **DDS/EXR 直接查看器**：浏览器端像素解码 + WebGL 显示，无需生成预览 PNG。详情见 `static/js/CLAUDE.md`
+- **KaTeX 数学公式**：本地托管（`static/vendor/katex/`），全站加载。`$...$` 行内、`$$...$$` 块级，初始化在 `extend_footer.html`
+- **Mermaid 图表**：本地托管（`static/vendor/mermaid.min.js`），按需加载。初始化在 `static/js/mermaid-init.js`
+- **GPU 调用图**：vis-network 短代码（`{{< gpugraph >}}`），本地托管（`static/vendor/vis-network.min.js`）
+- **列表排序**：`static/js/sort-bar.js` 共享模块，`list.html` 和 `section/local.html` 通过 `window.SortBarConfig` 配置
+- **404 页面**：`layouts/404.html`，中文友好提示
+- **第三方库**：全部本地托管在 `static/vendor/`，零 CDN 依赖。版本和更新命令见 `static/vendor/CLAUDE.md`
 - **树形列表视图**：`layouts/_partials/post_tree.html` 递归 partial，基于 Hugo `.Sections` 渲染文件夹层级。`list.html`（`/posts/`）和 `section/local.html`（`/local/`）均已接入。需在分组文件夹中添加 `_index.md`（含 `title`）使其成为 Hugo section。样式：`assets/css/extended/post-tree.css`
 - **缩略图预览**：树形视图中自动提取每篇文章首张图片（DDS/EXR/PNG/JPG/WebP），DDS/EXR 由 `image-viewer.js` 转为 canvas 显示
-- **自定义头部**：`layouts/_partials/header.html`（主题切换、宽度控制、密码按钮、VS Code/资源管理器/Claude Code 快捷按钮）
+- **自定义头部**：`layouts/_partials/header.html`（主题切换、宽度控制、VS Code/资源管理器/Claude Code 快捷按钮）
 - Hugo server 在 watch 模式下自动重载，无需手动重启
 
 ## 内容规则

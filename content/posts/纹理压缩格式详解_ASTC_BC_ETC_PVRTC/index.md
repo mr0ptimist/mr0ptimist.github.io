@@ -2,7 +2,7 @@
 date = '2026-04-22T10:00:00+08:00'
 draft = false
 title = '纹理压缩格式详解：ASTC、BC、ETC 与 PVRTC'
-tags = ['GPU', '移动端', '文档', '性能优化']
+tags = ['GPU', '移动端', '性能']
 categories = ['图形渲染']
 +++
 

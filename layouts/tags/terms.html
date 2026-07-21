@@ -1,0 +1,68 @@
+{{- define "main" }}
+
+{{- $pages := where site.RegularPages "Section" "in" (slice "posts" "local") }}
+
+<header class="page-header">
+  <h1>{{ .Title }}</h1>
+</header>
+
+{{- /* Build map: category → tags */ -}}
+{{- $catMap := dict }}
+{{- range $pages }}
+  {{- $cats := .Params.categories }}
+  {{- $tags := .Params.tags }}
+  {{- range $cats }}
+    {{- $cat := . }}
+    {{- $existing := index $catMap $cat | default slice }}
+    {{- range $tags }}
+      {{- $existing = $existing | append . }}
+    {{- end }}
+    {{- $catMap = merge $catMap (dict $cat ($existing | uniq)) }}
+  {{- end }}
+{{- end }}
+
+{{- /* Sort categories alphabetically */ -}}
+{{- $catNames := slice }}
+{{- range $k, $v := $catMap }}
+  {{- $catNames = $catNames | append $k }}
+{{- end }}
+
+{{- range sort $catNames }}
+  {{- $cat := . }}
+  {{- $catTags := index $catMap $cat }}
+  {{- if gt (len $catTags) 0 }}
+  <section class="taxonomy-group">
+    <h2 class="taxonomy-cat-title">
+      <span class="taxonomy-cat-icon">📁</span>
+      {{- $catPage := site.GetPage (printf "/categories/%s" ($cat | urlize)) }}
+      {{- if $catPage }}
+      <a href="{{ $catPage.RelPermalink }}">{{ $catPage.LinkTitle }}</a>
+      {{- else }}
+      <span>{{ $cat }}</span>
+      {{- end }}
+      <sup class="taxonomy-cat-count">{{ len $catTags }}</sup>
+    </h2>
+    <ul class="taxonomy-tags">
+      {{- range sort $catTags }}
+      {{- $tagPage := site.GetPage (printf "/tags/%s" (. | urlize)) }}
+      {{- if $tagPage }}
+      {{- $realCount := 0 }}
+      {{- range $tagPage.Pages }}
+        {{- if or (eq .Section "posts") (eq .Section "local") }}{{ $realCount = add $realCount 1 }}{{ end }}
+      {{- end }}
+      {{- if gt $realCount 0 }}
+      <li class="taxonomy-tag-item">
+        <a href="{{ $tagPage.RelPermalink }}" class="taxonomy-tag-link">
+          {{- $tagPage.LinkTitle }}
+          <sup>{{ $realCount }}</sup>
+        </a>
+      </li>
+      {{- end }}
+      {{- end }}
+      {{- end }}
+    </ul>
+  </section>
+  {{- end }}
+{{- end }}
+
+{{- end }}{{/* end main */}}

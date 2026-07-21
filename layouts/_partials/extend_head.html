@@ -9,53 +9,5 @@
 
 {{- if .Page.Store.Get "hasMermaid" }}
 <script src="{{ "vendor/mermaid.min.js" | relURL }}"></script>
-<script>
-mermaid.initialize({
-  startOnLoad: false,
-  securityLevel: 'loose',
-  theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
-  maxEdges: 2000,
-  flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis' },
-  themeVariables: { fontSize: '14px' }
-});
-
-function runMermaid() {
-  // Hugo's safeHTML sets innerHTML, but the browser HTML parser eats angle-bracket
-  // syntax like <<interface>> (parses <interface> as an HTML tag). Fix by reading
-  // innerHTML, restoring &lt; sequences that should be <<, and writing back via
-  // textContent so mermaid sees the correct source.
-  document.querySelectorAll('pre.mermaid:not([data-processed])').forEach(function(pre) {
-    var html = pre.innerHTML;
-    html = html.replace(/&lt;</g, '&lt;&lt;').replace(/>&gt;/g, '&gt;&gt;');
-    // Preserve <br/> before textContent strips it (HTML parser turns <br/> into <br> element)
-    html = html.replace(/<br\s*\/?>/gi, '%%MERMAID_BR%%');
-    var temp = document.createElement('div');
-    temp.innerHTML = html;
-    var text = temp.textContent || temp.innerText;
-    text = text.replace(/%%MERMAID_BR%%/g, '<br/>');
-    pre.textContent = text;
-  });
-  mermaid.run({ querySelector: 'pre.mermaid:not([data-processed])' }).then(function() {
-    document.querySelectorAll('pre.mermaid svg').forEach(function(svg) {
-      svg.querySelectorAll('.nodeLabel div, .nodeLabel p').forEach(function(el) {
-        el.style.maxWidth = 'none';
-      });
-      // Force all text black with inline !important to block Dark Reader
-      svg.querySelectorAll('text').forEach(function(t) {
-        t.style.setProperty('fill', '#000', 'important');
-      });
-    });
-  });
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  runMermaid();
-  // Re-render mermaid inside details when they open
-  document.addEventListener('toggle', function(e) {
-    if (e.target.open) {
-      setTimeout(runMermaid, 50);
-    }
-  });
-});
-</script>
+<script src="{{ "js/mermaid-init.js" | relURL }}"></script>
 {{- end }}

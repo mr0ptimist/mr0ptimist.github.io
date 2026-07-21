@@ -2,8 +2,8 @@
 date = '2026-04-20T10:03:00+08:00'
 draft = false
 title = 'NvPerf GPU 性能计数器参考手册'
-tags = ['GPU', 'NVIDIA', 'Nsight', '性能分析']
-categories = ['性能优化']
+tags = ['GPU', 'NVIDIA', 'Nsight', '性能']
+categories = ['图形渲染']
 +++
 
 # NvPerf GPU 性能计数器参考手册

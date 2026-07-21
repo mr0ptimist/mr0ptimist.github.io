@@ -7,5 +7,5 @@ if "%WT_SESSION%"=="" (
     exit /b
 )
 
-hugo
+hugo --cleanDestinationDir --environment production --minify
 echo Build complete. Output in public/

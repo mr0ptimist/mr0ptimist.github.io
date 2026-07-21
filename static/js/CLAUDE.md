@@ -11,14 +11,27 @@
 | `exr-parser.js` | `<script>` 或 `importScripts()` | OpenEXR 解析器（仅 uncompressed）。主线程和 Worker 复用同一文件。暴露 `window.EXR`。 |
 | `decode-worker.js` | `new Worker(url)` | Web Worker。通过 `importScripts()` 加载 worker-shared + exr-parser。处理 DDS（BC1-5 + 未压缩）和 EXR。BC6H/BC7 返回失败。 |
 | `image-viewer.js` | `<script>`（最后加载） | UI 入口：channel viewer、pixel inspector、mip/array slider、lazy load、缓存管理。 |
+| `gpu-graph.js` | `<script>`（按需，有 GPU 图页面） | GPU 帧调用图可视化（vis-network）。`GpuGraph.init(...)` |
+| `sort-bar.js` | `<script>`（列表页） | 文章列表排序：树形/平铺双模式。通过 `window.SortBarConfig` 配置。 |
+| `mermaid-init.js` | `<script>`（按需，有 Mermaid 页面） | Mermaid 图表渲染：初始化配置、`<<interface>>` 修复、Dark Reader 防护。 |
+| `color-remap.js` | `<script>` | 颜色通道重映射工具。 |
 
 ## 加载顺序
 
+**始终加载**（`extend_footer.html`）：
 1. `worker-shared.js` → 定义 `ImageCodecShared`
 2. `dds-parser.js` → 定义 `DDS`
 3. `exr-parser.js` → 定义 `EXR`
-4. `decode-worker.js` → Worker 文件（由 image-viewer 以 `new Worker()` 加载）
+4. `color-remap.js` → 颜色重映射
 5. `image-viewer.js` → 初始化全部 UI 逻辑
+
+**按需加载**（`extend_head.html`）：
+- `gpu-graph.js` → 页面有 {{< gpugraph >}} 时
+- `mermaid-init.js` → 页面有 Mermaid 图表时
+- `sort-bar.js` → 列表页（list.html / section/local.html）
+
+**Worker 文件**（由 image-viewer 以 `new Worker()` 加载）：
+- `decode-worker.js`
 
 ## 架构约束
 

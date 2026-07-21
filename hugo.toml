@@ -63,11 +63,6 @@ buildFuture = true
     url = '/tags/'
     weight = 30
   [[menus.main]]
-    identifier = 'categories'
-    name = '分类'
-    url = '/categories/'
-    weight = 40
-  [[menus.main]]
     identifier = 'archives'
     name = '归档'
     url = '/archives/'

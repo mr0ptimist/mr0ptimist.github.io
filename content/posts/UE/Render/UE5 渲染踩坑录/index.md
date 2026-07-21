@@ -2,7 +2,7 @@
 date = '2026-05-25T00:00:00+08:00'
 draft = false
 title = 'UE5 渲染踩坑录'
-tags = ['UE5', 'DXC', 'HLSL', 'Shader', 'VertexFactory', 'RenderDoc', 'ShaderParameter', 'MeshBatch', 'FShaderParameter', 'Rendering', 'UniformBuffer', 'BasePass', 'SceneTextures', 'USF', 'SingleLayerWater']
+tags = ['UE', 'DXC', 'HLSL', 'Shader', 'VertexFactory', 'RenderDoc', 'ShaderParameter', 'MeshBatch', 'Rendering', 'UniformBuffer', 'BasePass', 'SceneTextures', 'USF', 'SingleLayerWater']
 categories = ['图形渲染']
 +++
 

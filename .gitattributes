@@ -1,0 +1,23 @@
+# Binary files — don't diff, store as-is
+*.dds binary
+*.exr binary
+*.rdc binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.mp4 binary
+*.drawio binary
+
+# Minified vendor JS/CSS — don't diff
+static/vendor/*.min.js binary
+static/vendor/*.min.css binary
+
+# Archives
+*.zip binary
+*.7z binary
+*.rar binary

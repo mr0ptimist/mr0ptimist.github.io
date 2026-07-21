@@ -2,7 +2,7 @@
 date = '2026-06-26T18:00:00+08:00'
 draft = false
 title = '消费级安卓机 Shader 性能与 ALU 测试 CLI 工具调研'
-tags = ['Android', 'Shader', 'GPU', '性能测试', 'CLI', 'Mali', 'Adreno']
+tags = ['Android', 'Shader', 'GPU', '性能', 'CLI', 'Mali', 'Adreno']
 categories = ['图形渲染']
 +++
 
