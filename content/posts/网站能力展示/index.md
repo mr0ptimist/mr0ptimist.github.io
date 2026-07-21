@@ -294,7 +294,17 @@ classDiagram
 - 自动渲染，无需手动调用
 - 错误时降级显示（`throwOnError: false`），不阻断页面
 
-**用法**：
+**效果**：
+
+行内公式：质能方程 $E = mc^2$，欧拉公式 $e^{i\pi} + 1 = 0$。
+
+块级公式：
+
+$$
+\int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}
+$$
+
+**Markdown 源码**：
 
 ```text
 行内：$E = mc^2$
@@ -305,7 +315,7 @@ $$
 $$
 ```
 
-- **相关文件**：`layouts/_partials/extend_head.html`
+- **相关文件**：`layouts/_partials/extend_head.html`（CDN 加载）、`layouts/_partials/extend_footer.html`（初始化）
 
 ---
 
@@ -543,7 +553,7 @@ PaperMod 主题的暗色/亮色模式切换按钮（导航栏月亮/太阳图标
 
 - **vis-network**（~200KB）：仅当页面含 `gpugraph` 短代码时从 CDN 加载
 - **Mermaid.js**（~1MB）：仅当页面含 `mermaid` 代码块时从 CDN 加载
-- **KaTeX**：所有页面均加载（轻量 CDN）
+- **KaTeX**：所有页面均加载（本地托管，`static/js/katex.min.js`）
 - **DDS/EXR 查看器 JS**：所有文章页加载，但解码仅在图片进入视口时触发（懒加载）
 
 ---
