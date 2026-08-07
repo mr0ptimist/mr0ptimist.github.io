@@ -7,3 +7,4 @@ content/local/
 content/PRIVATE.md
 config/development/
 .idea/
+.DS_Store
