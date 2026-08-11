@@ -327,3 +327,84 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<style>
+.copy-toast {
+  position: fixed;
+  z-index: 9999;
+  padding: 6px 14px;
+  background: rgba(0,0,0,0.78);
+  color: #fff;
+  font-size: 13px;
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translate(-50%, -120%);
+  animation: copy-toast-in 0.18s ease-out, copy-toast-out 0.25s ease-in 1.2s forwards;
+}
+[data-theme="dark"] .copy-toast {
+  background: rgba(255,255,255,0.82);
+  color: #111;
+}
+@keyframes copy-toast-in {
+  from { opacity: 0; transform: translate(-50%, -80%); }
+  to   { opacity: 1; transform: translate(-50%, -120%); }
+}
+@keyframes copy-toast-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+</style>
+<script>
+(function(){
+  var postContent = document.querySelector('.post-content');
+  if (!postContent) return;
+
+  // execCommand fallback for non-secure contexts (plain HTTP, file://)
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand('copy'); } catch (err) {}
+    document.body.removeChild(ta);
+  }
+
+  function copyText(text) {
+    if (window.isSecureContext && navigator.clipboard) {
+      try {
+        navigator.clipboard.writeText(text);
+        return;
+      } catch (err) { /* fall through to legacy */ }
+    }
+    legacyCopy(text);
+  }
+
+  postContent.addEventListener('contextmenu', function(e) {
+    try {
+      var sel = window.getSelection();
+      if (!sel || sel.isCollapsed) return;
+
+      var text = sel.toString().trim();
+      if (!text) return;
+
+      e.preventDefault();
+      copyText(text);
+
+      var toast = document.createElement('div');
+      toast.className = 'copy-toast';
+      toast.textContent = '已复制';
+      toast.style.left = e.clientX + 'px';
+      toast.style.top  = e.clientY + 'px';
+      document.body.appendChild(toast);
+
+      toast.addEventListener('animationend', function(ev) {
+        if (ev.animationName === 'copy-toast-out') toast.remove();
+      });
+    } catch (err) {}
+  });
+})();
+</script>
+

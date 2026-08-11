@@ -73,7 +73,7 @@ try {
     # Start Claude in the article directory, prompt references local files
     $prompt = $config.article.prompt
     Set-Location $articleDir
-    claude --model 'deepseek-v4-pro[1m]' --dangerously-skip-permissions $prompt
+    claude --model 'deepseek-v4-flash[1m]' --dangerously-skip-permissions $prompt
 } catch {
     Write-Host "===== ERROR =====" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
