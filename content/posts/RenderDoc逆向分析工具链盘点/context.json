@@ -1,0 +1,35 @@
+{
+    "rdc_files": [
+    ],
+    "code_refs": [
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderSimplify/api.py",
+            "note": "simplify_source 进程内标准入口（MCP/ShaderVarify 共用）"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderToolchain/simplify_subprocess.py",
+            "note": "ShaderSimplify 的 subprocess 通道（gen_hlsl/gen_glsl/gen_json，供插件/rdc-cli）"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderToolchain/shader_rename.py",
+            "note": "反射级重命名（2026-08 归一，三消费者共用）"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/_src/simplify_cli.py",
+            "note": "命令行入口：--list-passes 模式 + stdin JSON 协议"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderVarify/_src/shader_verify.py",
+            "note": "三层 ground-truth 验证（api.simplify_source 调用点）"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/RenderdocMCP/mcp/src/renderdoc_mcp/server.py",
+            "note": "11 组工具模块、53 个 @mcp.tool 注册"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/_doc/dependency-chain.md",
+            "note": "依赖矩阵校验真理源（文章 mermaid 图依据）"
+        }
+    ],
+    "notes": "2026-08-12 群智核查（swarm）后同步：pass 数 29/40 为 --list-passes 实测，工具分组 11 模块，simplify_subprocess 与 simplify_cli 双视角命名已统一。"
+}
