@@ -8,17 +8,22 @@
 
 .md-content {
   line-height: 1.65;                          /* 正文舒展（body 默认 1.6） */
-  font-size: clamp(17px, 1rem + 0.2vw, 19px); /* 17–19px 随视口平滑缩放 */
+  /* rem 上下限：100% 字号时等效 17–19px，随浏览器字号设置等比缩放
+     （px 边界会钳制用户放大，标题与正文层级可能反转） */
+  font-size: clamp(1.0625rem, 1rem + 0.2vw, 1.1875rem);
   font-optical-sizing: auto;
 }
 
-/* 大标题：负字距 + 收紧行高（负 tracking 在 30px+ 级别才肉眼可见） */
+/* 大标题：负字距 + 收紧行高（负 tracking 在 30px+ 级别才肉眼可见）
+   字号 rem 基准：随用户字号设置等比缩放（主题固定 px，此处覆盖） */
 .post-content h2 {
+  font-size: 2rem;          /* 32px @100% */
   letter-spacing: -0.02em;
   line-height: 1.25;
 }
 
 .post-content h3 {
+  font-size: 1.5rem;        /* 24px @100% */
   letter-spacing: -0.01em;
   line-height: 1.3;
 }
@@ -29,3 +34,7 @@
 .post-content h6 {
   letter-spacing: 0;
 }
+
+.post-content h4 { font-size: 1rem; }         /* 16px @100% */
+.post-content h5 { font-size: 0.875rem; }     /* 14px @100% */
+.post-content h6 { font-size: 0.75rem; }      /* 12px @100% */
