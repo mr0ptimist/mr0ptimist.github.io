@@ -7,9 +7,24 @@ mermaid.initialize({
   securityLevel: 'loose',
   theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default',
   maxEdges: 2000,
-  flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis' },
-  themeVariables: { fontSize: '14px' }
+  flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis', wrappingWidth: 280 },
+  themeVariables: { fontSize: '14px', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Microsoft YaHei', sans-serif" }
 });
+
+function mermaidRun(nodes) {
+  // mermaid 用 f.width === r 严格相等判断标签换行分支；非 100% DPI（Windows 135%
+  // 缩放等）下量出 279.99 ≠ 280 → 永远走 nowrap 分支 → 超宽行被盒子硬剪且节点框
+  // 按失真测量算小。渲染期间对 getBoundingClientRect 的宽高取整，让判定与布局一致。
+  var orig = Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect = function () {
+    var r = orig.call(this);
+    return new DOMRect(r.x, r.y, Math.round(r.width), Math.round(r.height));
+  };
+  return mermaid.run(nodes).then(function (result) {
+    Element.prototype.getBoundingClientRect = orig;
+    return result;
+  });
+}
 
 function runMermaid() {
   // Hugo's safeHTML sets innerHTML, but the browser HTML parser eats angle-bracket
@@ -26,20 +41,34 @@ function runMermaid() {
     var text = temp.textContent || temp.innerText;
     text = text.replace(/%%MERMAID_BR%%/g, '<br/>');
     pre.textContent = text;
+    pre.__mmdSrc = text;  // 保存源，供闭合后重渲染（此时 pre.innerHTML 已是 SVG，无法再回源）
   });
-  mermaid.run({ querySelector: 'pre.mermaid:not([data-processed])' }).then(function () {
-    document.querySelectorAll('pre.mermaid svg').forEach(function (svg) {
-      svg.querySelectorAll('.nodeLabel div, .nodeLabel p').forEach(function (el) {
-        el.style.maxWidth = 'none';
-      });
-      // Force all text black with inline !important to block Dark Reader
-      svg.querySelectorAll('text').forEach(function (t) {
-        t.style.setProperty('fill', '#000', 'important');
-      });
-      attachPan(svg.closest('pre.mermaid'));
-      attachInlineZoom(svg.closest('pre.mermaid'));
+  mermaidRun({ querySelector: 'pre.mermaid:not([data-processed])' }).then(postProcessMermaid);
+}
+
+function postProcessMermaid() {
+  document.querySelectorAll('pre.mermaid svg').forEach(function (svg) {
+    svg.querySelectorAll('.nodeLabel div, .nodeLabel p').forEach(function (el) {
+      el.style.maxWidth = 'none';
     });
+    // Force all text black with inline !important to block Dark Reader
+    svg.querySelectorAll('text').forEach(function (t) {
+      t.style.setProperty('fill', '#000', 'important');
+    });
+    attachPan(svg.closest('pre.mermaid'));
+    attachInlineZoom(svg.closest('pre.mermaid'));
   });
+}
+
+// 闭合章节内渲染的图标签测量失真（隐藏容器 getBoundingClientRect=0 → nowrap 分支 →
+// 行宽超上限被硬剪），章节打开时用保存的源重渲染并重置 pan/zoom 绑定
+function reRenderMermaid(pre) {
+  if (!pre || !pre.__mmdSrc) return;
+  pre.textContent = pre.__mmdSrc;
+  pre.removeAttribute('data-processed');
+  delete pre.dataset.panAttached;
+  delete pre.dataset.zoomAttached;
+  mermaidRun({ nodes: [pre] }).then(postProcessMermaid);
 }
 
 /* ==================== 页面内拖拽平移 ====================
@@ -114,21 +143,31 @@ function attachInlineZoom(pre) {
   if (vbParts.length === 4 && vbParts[2] > 0 && vbParts[3] > 0) {
     svg.style.aspectRatio = vbParts[2] + ' / ' + vbParts[3];  // 适配缩放保持比例
   }
-  // CSS max 已把初始显示宽压到容器内：记录适配宽为基准，解除 max 钳制（放大不受限）
+  // CSS max 已把初始显示尺寸压到容器内：记录适配宽为基准。
+  // 长图高度会被 max-height 钳住（宽不变 → 比例失真），按 70vh 反推正确适配宽；
+  // 随后解除 max 钳制（放大不受限，超出部分靠 pre 内部滚动平移查看）
   var baseW = svg.getBoundingClientRect().width || parseFloat(svg.getAttribute('width')) || 800;
+  var cs = getComputedStyle(svg);
+  var maxH = parseFloat(cs.maxHeight) || 0;
+  if (maxH > 0 && baseW * ratio > maxH) baseW = maxH / ratio;
   svg.style.maxWidth = 'none';
+  svg.style.maxHeight = 'none';
   svg.dataset.baseW = baseW;  // 供 attachPan 判断是否放大（拖拽平移启用条件）
   // 高度按 viewBox 比例：CSS height:auto 对 SVG 取 attribute height（不随 width
   // 联动），只改宽度会横向拉伸成扁图，必须显式同设。
   var baseH = baseW * ratio;
-  var MIN_S = 0.25, MAX_S = 3;
+  var MIN_S = 0.25;
+  // 上限相对自然尺寸而非适配尺寸：SVG 矢量放大无质量损失，可放大到自然尺寸 3 倍。
+  // 长图适配后 baseW 远小于自然宽（如 79 vs 212），固定 3x 适配宽连自然尺寸都回不到
+  var naturalW = parseFloat(svg.getAttribute('width')) || baseW;
+  var MAX_S = Math.max(3, 3 * (naturalW / baseW));
 
   // hover 右上角操作提示（pointer-events none，不挡交互）
   var wrap = pre.closest('.mermaid-wrap') || pre;
   var hint = document.createElement('div');
   hint.className = 'mermaid-hint';
   hint.setAttribute('data-darkreader-ignore', '');
-  hint.textContent = 'Ctrl + 滚轮缩放';
+  hint.textContent = 'Shift + 滚轮缩放';
   wrap.appendChild(hint);
 
   function applyScale(s) {
@@ -146,7 +185,7 @@ function attachInlineZoom(pre) {
   applyScale(1);  // 固化适配尺寸：maxWidth 解除后 svg 不会弹回 attribute 原始宽
 
   svg.addEventListener('wheel', function (e) {
-    if (!e.ctrlKey && !e.metaKey) return;  // 无修饰：滚动文章
+    if (!e.shiftKey) return;  // 无修饰：滚动文章（Shift+滚轮缩放，避免与浏览器 Ctrl+滚轮页面缩放冲突）
     e.preventDefault();
     var ns = curScale() * Math.exp(-e.deltaY * 0.0015);
     ns = Math.max(MIN_S, Math.min(MAX_S, ns));
@@ -200,10 +239,11 @@ function runRemoteMermaid() {
 document.addEventListener('DOMContentLoaded', function () {
   runRemoteMermaid();
   runMermaid();
-  // Re-render mermaid inside details when they open
+  // Re-render mermaid inside details when they open（闭合时渲染会标签测量失真截断）
   document.addEventListener('toggle', function (e) {
-    if (e.target.open) {
-      setTimeout(runMermaid, 50);
-    }
+    if (!e.target.open) return;
+    setTimeout(function () {
+      e.target.querySelectorAll('pre.mermaid').forEach(reRenderMermaid);
+    }, 50);
   });
 });

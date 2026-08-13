@@ -1,7 +1,6 @@
-/* Mermaid diagrams — override PaperMod's details overflow:clip */
-.post-content details.collapsible-section::details-content {
-  overflow: visible;
-}
+/* Mermaid diagrams — pre.mermaid 自管溢出（overflow:hidden + JS 滚动），
+   ::details-content 的 overflow:clip（PaperMod 默认）不再覆盖为 visible：
+   CDP 实测（2026-08-13）clip 下 svg 渲染正常 240×76，折叠动画无内容溢出 */
 
 .post-content pre.mermaid {
   background: transparent;
@@ -31,6 +30,16 @@
   cursor: grabbing;
 }
 
+/* 文字标签上不显示抓手（拖拽仅空白区域生效）；平移拖拽中保持抓手 */
+.post-content pre.mermaid svg foreignObject,
+.post-content pre.mermaid svg foreignObject * {
+  cursor: default;
+}
+.post-content pre.mermaid.panning svg foreignObject,
+.post-content pre.mermaid.panning svg foreignObject * {
+  cursor: grabbing;
+}
+
 /* ---- 操作提示（hover 图右上角，pointer-events none 不挡交互） ---- */
 .mermaid-wrap { position: relative; }
 .mermaid-hint {
@@ -50,10 +59,6 @@
 }
 .mermaid-wrap:hover .mermaid-hint { opacity: 1; }
 
-/* Mermaid node labels: override internal 200px max-width that truncates long text */
-.post-content pre.mermaid .nodeLabel,
-.post-content pre.mermaid .nodeLabel div,
-.post-content pre.mermaid .nodeLabel p {
-  max-width: none !important;
-  white-space: normal !important;
-}
+/* Mermaid 长标签换行由 flowchart.wrappingWidth 配置负责（布局与渲染一致）。
+   旧 CSS 覆盖（max-width:none + white-space:normal）与 mermaid 内联
+   table-cell/nowrap 冲突，导致长标签盒子坍缩为 17px——已移除（2026-08-13） */

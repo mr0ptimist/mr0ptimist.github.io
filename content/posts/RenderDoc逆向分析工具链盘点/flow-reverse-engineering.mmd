@@ -10,7 +10,7 @@ flowchart TD
     A1g -- 否 --> A1f["debug 定位是哪个 pass 引入差异<br/>（simplify-bug-diagnose）"]:::act --> A1
     A1g -- 是 --> A2
 
-    A1 -. "① 落盘产物（保真链）是 ⑤ 改名链的唯一输入（可读链带 space0 不兼容）" .-> A4
+    A1 -. "① 落盘产物（保真链）是<br/>⑤ 改名链的唯一输入<br/>（可读链带 space0 不兼容）" .-> A4
 
     A2["② 绑定 + 反射<br/>rdc shader --reflect / rdc bindings<br/>输入：EID<br/>输出：cbuffer 清单（名·bind·大小）+ 纹理/UAV 清单"]:::cli --> A25
     A25["③ 资源名即语义<br/>rdc shader-map / resource / descriptors<br/>输入：EID → shader_id<br/>输出：shader 名 + 每纹理真实资源名·格式·尺寸"]:::cli --> A3
