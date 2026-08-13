@@ -47,3 +47,22 @@ Hugo 版本：0.160.1 extended。
 - 处理任何文章前，必须先读取其所在目录的 `context.json`
 - 禁止在 `##` 外包裹 `<details>` 标签；禁止在同一 `##` 内的 `###` 小节之间放 `---`
 - 分组文件夹需添加 `_index.md`（含 `title`），空文件夹自动隐藏
+
+## 调试教训（2026-08 mermaid 布局爆炸）
+
+**事故**：`motion-reduce.css` 全局 `* { transition-duration: 0.01ms !important }`
+破坏 mermaid 11.16 的 label 测量 → foreignObject 钳到 16384px → 画布 16530px。
+已修复为 `pre.mermaid` 内元素豁免 transition-duration，**勿删豁免**。
+
+**要点**：
+- 视觉/节点正常 ≠ 布局正常：查 `svg.getAttribute('width')`，别只看截图
+- 全局动效覆盖必须豁免 mermaid（依赖 transition 的库同理）
+- headless Chrome 默认 `prefers-reduced-motion: reduce`，CDP 测试环境 = 用户开减弱动态的环境
+
+**调试工具链**：
+- CDP 实测（headless + node WebSocket，`Runtime.evaluate` 量 computed/getBBox）
+- CSS 二分：隔离页逐个 `<link>` css 文件，**@media 内规则当整体测**
+- hook 中间态：patch `SVGElement.prototype.getBBox/setAttribute` 抓渲染中值
+- 像素裁决：Read 截图有 vision 误读风险，PIL 采样同点像素 open/closed 对照
+- `mmdc` 干净环境渲染做尺寸基准，定位环境因素
+- SVG 无 `.click()`，用 `dispatchEvent(new MouseEvent('click',{bubbles:true}))`

@@ -3,6 +3,7 @@
 (function(){
   var toc = document.querySelector('details.toc');
   if (!toc) return;
+  var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var links = toc.querySelectorAll('a');
   if (!links.length) return;
 
@@ -63,7 +64,7 @@
         e.preventDefault();
         requestAnimationFrame(function() {
           requestAnimationFrame(function() {
-            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            target.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' });
           });
         });
       }
@@ -405,6 +406,29 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     } catch (err) {}
   });
+})();
+</script>
+
+<script>
+(function(){
+  var KEY = 'blog_compare_off';
+  function setClass(on) {
+    document.documentElement.classList.toggle('compare-off', on);
+    var btn = document.getElementById('compare-btn');
+    if (btn) {
+      btn.title = on ? '已关闭增强（对比中）· 点击恢复' : '增强已开启 · 点击关闭对比';
+      btn.setAttribute('aria-label', btn.title);
+    }
+  }
+  window.toggleCompare = function() {
+    var on = !document.documentElement.classList.contains('compare-off');
+    setClass(on);
+    try { sessionStorage.setItem(KEY, on ? '1' : '0'); } catch (err) {}
+  };
+  // 页面加载时恢复对比状态（仅文章页——按钮只在文章页存在，非文章页无入口撤销）
+  try {
+    if (sessionStorage.getItem(KEY) === '1' && document.getElementById('compare-btn')) setClass(true);
+  } catch (err) {}
 })();
 </script>
 

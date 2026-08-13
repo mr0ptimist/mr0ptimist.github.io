@@ -1,0 +1,31 @@
+/* ============================================================
+   排版细节（Apple §15：typography）
+   - 大标题负 tracking，小标题近 0（tracking 随字号变化）
+   - 行高随字号反向调整：大标题紧、正文舒展
+   - 正文随视口 clamp 缩放（rem 基础，尊重系统字号）
+   - 作用于所有 .md-content（文章正文 + 列表页/分类页描述文字）
+   ============================================================ */
+
+.md-content {
+  line-height: 1.65;                          /* 正文舒展（body 默认 1.6） */
+  font-size: clamp(17px, 1rem + 0.2vw, 19px); /* 17–19px 随视口平滑缩放 */
+  font-optical-sizing: auto;
+}
+
+/* 大标题：负字距 + 收紧行高（负 tracking 在 30px+ 级别才肉眼可见） */
+.post-content h2 {
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.post-content h3 {
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+/* 小字号（16px 以下）不再负字距，接近 0 */
+.post-content h4,
+.post-content h5,
+.post-content h6 {
+  letter-spacing: 0;
+}

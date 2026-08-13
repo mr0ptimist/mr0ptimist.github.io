@@ -1,0 +1,8 @@
+{{- $src := .Get 0 -}}
+{{- $res := .Page.Resources.GetMatch $src -}}
+{{- .Page.Store.Set "hasMermaid" true -}}
+<div class="mmd-src" data-src="{{ with $res }}{{ $res.RelPermalink }}{{ end }}" data-name="{{ $src }}">
+  {{- if $res }}<p class="mmd-loading">mmd 加载中…</p>{{- else -}}
+  <p class="mmd-error">⚠️ mmd 资源未找到：{{ $src }}</p>
+  {{- end -}}
+</div>

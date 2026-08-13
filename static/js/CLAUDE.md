@@ -50,3 +50,9 @@
 2. 更新 `decode-worker.js` 中 `importScripts(...)` 的 `?v=N` 参数（+1）
 
 然后让用户 `Ctrl+Shift+R` 硬刷新。漏掉任何一步，改动不会生效。
+
+## ⚠️ mermaid-init.js 缓存纪律
+
+`layouts/_partials/extend_head.html` 加载 `js/mermaid-init.js?v=N`（无 hash URL，版本号手动维护）。
+**修改 `mermaid-init.js` 后必须把 `?v=N` 加 1**，否则浏览器缓存旧版（改 mermaid 相关功能无效时先查此项）。
+`mermaid.css` 改动与 `mermaid-init.js` 强耦合（布局/查看器），同批修改时两者都要验证。

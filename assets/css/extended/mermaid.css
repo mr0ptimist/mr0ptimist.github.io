@@ -5,17 +5,50 @@
 
 .post-content pre.mermaid {
   background: transparent;
-  overflow-x: auto;
-  overflow-y: hidden;
-  display: flex;
-  justify-content: center;
+  /* hidden：初始适配无溢出；放大后靠 JS 拖拽设置 scrollLeft/Top（hidden 不阻止
+     程序化滚动），滚轮永不滚 pre 内容——滚轮始终滚动文章 */
+  overflow: hidden;
+  /* 巨图以原始尺寸在容器内横纵滚动，不撑爆页面 */
+  max-height: 70vh;
   padding: 1em 0;
 }
 
 .post-content pre.mermaid svg {
-  max-width: none;
+  /* 初始适配容器：完整可见 → pre 无滚动空间 → 滚轮穿透滚动文章；
+     放大后 JS 接管尺寸（attach 时解除 max 钳制），保持 viewBox 等比 */
+  max-width: 100%;
+  max-height: calc(70vh - 2em);
   height: auto;
+  display: block;
+  margin: 0 auto;
+  cursor: grab;
+  touch-action: none;  /* 触屏拖拽交给我们（平移 = pre 滚动） */
 }
+.post-content pre.mermaid.panning {
+  user-select: none;
+}
+.post-content pre.mermaid.panning svg {
+  cursor: grabbing;
+}
+
+/* ---- 操作提示（hover 图右上角，pointer-events none 不挡交互） ---- */
+.mermaid-wrap { position: relative; }
+.mermaid-hint {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(20, 24, 35, 0.78);
+  color: #eee;
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.mermaid-wrap:hover .mermaid-hint { opacity: 1; }
 
 /* Mermaid node labels: override internal 200px max-width that truncates long text */
 .post-content pre.mermaid .nodeLabel,

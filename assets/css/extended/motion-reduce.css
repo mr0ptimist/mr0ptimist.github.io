@@ -1,0 +1,37 @@
+/* ============================================================
+   减弱动态（Apple §14：prefers-reduced-motion）
+   系统开启「减弱动态」时全局降级：
+   - 动画/过渡立即完成（0.01ms，而非 display:none —— 保留终态，
+     避免 ptree-reveal 这类从透明开始的动画卡在初始帧）
+   - scroll-bounce 等无限循环动画只播一次
+   - 平滑滚动关闭
+   覆盖范围含 PaperMod 主题样式（extended 最后加载 + !important）
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  html:not(.compare-off) {
+    scroll-behavior: auto;
+  }
+
+  html:not(.compare-off) *,
+  html:not(.compare-off) *::before,
+  html:not(.compare-off) *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* ⚠️ mermaid 豁免：其 label 的尺寸测量依赖 CSS transition，
+     全局 transition-duration 覆盖会导致 foreignObject 布局爆炸
+     （min(10*width,16384) 钳到 16384px，画布被撑到 16530px） */
+  html:not(.compare-off) pre.mermaid *,
+  html:not(.compare-off) pre.mermaid *::before,
+  html:not(.compare-off) pre.mermaid *::after {
+    transition-duration: initial !important;
+  }
+
+  /* details::details-content 过渡伪元素不被 * 命中，单独降级 */
+  html:not(.compare-off) details::details-content {
+    transition-duration: 0.01ms !important;
+  }
+}

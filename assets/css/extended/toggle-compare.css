@@ -1,0 +1,25 @@
+/* ============================================================
+   对比开关：header 的「对比」按钮切换 html.compare-off
+   关闭 typography.css / motion-reduce.css 的增强，恢复
+   PaperMod 主题默认排版（18px / line-height 1.6 / 标题 1.2）
+   特异性高于 typography.css，顺序无关
+   ============================================================ */
+
+html.compare-off .md-content {
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+html.compare-off .post-content h2,
+html.compare-off .post-content h3,
+html.compare-off .post-content h4,
+html.compare-off .post-content h5,
+html.compare-off .post-content h6 {
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+/* 关闭增强时按钮高亮提示 */
+html.compare-off #compare-btn {
+  color: var(--accent);
+}
