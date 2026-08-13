@@ -7,7 +7,7 @@ mermaid.initialize({
   securityLevel: 'loose',
   theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default',
   maxEdges: 2000,
-  flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis', wrappingWidth: 280 },
+  flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis', wrappingWidth: 400 },
   themeVariables: { fontSize: '14px', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Microsoft YaHei', sans-serif" }
 });
 

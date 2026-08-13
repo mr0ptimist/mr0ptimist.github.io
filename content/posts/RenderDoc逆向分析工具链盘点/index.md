@@ -95,7 +95,7 @@ flowchart LR
   classDef sup fill:#f1f5f9,stroke:#64748b,color:#333
   classDef src fill:#fff7ed,stroke:#ea580c,color:#333
 
-  subgraph A["① 抓帧 · 游戏帧怎么变成 .rdc<br/>(手段随场景而变，拆成三个互不影响的工具)"]
+  subgraph A["① 抓帧 · 游戏帧怎么变成 .rdc"]
     GAME["游戏帧"]:::src
     RD["RenderDoc 直接抓"]:::acq
     NS["NSightCaptureRDC<br/>Nsight 独占场景 → C++ Capture 中转"]:::acq
@@ -109,14 +109,14 @@ flowchart LR
     PAT --> RDC
   end
 
-  subgraph B["② 分析 · 人 / AI 读帧的入口<br/>(同一套 RenderDoc API，两种接口：AI 与脚本)"]
+  subgraph B["② 分析 · 人 / AI 读帧的入口"]
     MCP["RenderdocMCP<br/>MCP server · AI 代理直接操作"]:::acc
     CLI["rdc-cli<br/>文本流 CLI · grep / jq / 脚本"]:::acc
     RDC --> MCP
     RDC --> CLI
   end
 
-  subgraph C["③ 反编译 + 化简 · 不可读 → 可读<br/>(spirv-cross 是外部工具，化简是自研算法，分离才好各自迭代)"]
+  subgraph C["③ 反编译 + 化简 · 不可读 → 可读"]
     DECOMP["spirv-cross / HLSLDecompiler 反编译<br/>(经 ShaderToolchain 调度)"]:::pro
     SIM["ShaderSimplify 化简<br/>29 GLSL + 40 HLSL pass"]:::pro
     MCP --> DECOMP
@@ -124,12 +124,12 @@ flowchart LR
     DECOMP --> SIM
   end
 
-  subgraph D["④ 验证 · 质量闸门<br/>(化简 pass 天天改，必须像素级回归把关)"]
+  subgraph D["④ 验证 · 质量闸门"]
     VAR["ShaderVarify harness<br/>original → 重注入自检 → builtin → simplified<br/>三层逐像素对比"]:::ver
     SIM --> VAR
   end
 
-  subgraph E["⑤ 产出 · 分析结果收口<br/>(统一落盘，直通 Unity 移植)"]
+  subgraph E["⑤ 产出 · 分析结果收口"]
     SRE["ShaderRE<br/>逆向产出 + Unity 移植"]:::out
     REN["shader_rename（ShaderToolchain）<br/>SPIR-V 反射级重命名"]:::out
     ASM["AssembleShader<br/>组装进 Unity 模板"]:::out
