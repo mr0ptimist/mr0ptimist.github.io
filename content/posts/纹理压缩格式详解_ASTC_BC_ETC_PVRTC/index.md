@@ -32,7 +32,7 @@ BC 系列是 DirectX 生态中最主流的压缩格式，由 S3TC（DXT）发展
 
 #### 实际使用方式
 
-**编码端**：向压缩器提供带 Alpha 的源图（如 PNG with 1-bit alpha），大多数 BC1 编码器（如 DirectXTex、`nvcompress`、Compressonator）会自动判断 block 是否需要透明模式。若源图 alpha 为纯 0/255，编码器会尽量使用 `color0 <= color1` 模式将 `11` 映射为透明。
+**编码端**：向压缩器提供带 Alpha 的源图（如 PNG with 1-bit alpha），DirectXTex 的 BC1 编码器会按 block 自动判断是否需要透明模式（块内存在 alpha 低于阈值 0.5 的像素即采用 color0 <= color1 的三色+透明模式，全部不透明则用四色模式）；而 nvcompress 需显式加 -bc1a（DXT1a）才启用 1-bit alpha（普通 -bc1 会丢弃 alpha、纯 0/255 源也输出不透明块），Compressonator 需显式开启 bDXT1UseAlpha 并设置 nAlphaThreshold（默认关闭）。
 
 **API/格式**：Direct3D 与 Vulkan 对 BC1 的 alpha 处理并不统一：Direct3D 用单一 DXGI_FORMAT_BC1_UNORM（或 _SRGB/_TYPELESS）覆盖有/无 1-bit alpha 两种情形（是否含 alpha 由块编码决定）；而 Vulkan 在 API 层面显式区分无 alpha 的 VK_FORMAT_BC1_RGB_UNORM_BLOCK/_SRGB_BLOCK（"has no alpha and is considered opaque"）与带 1-bit alpha 的 VK_FORMAT_BC1_RGBA_UNORM_BLOCK/_SRGB_BLOCK（"provides 1 bit of alpha"），两者并非同一格式枚举。
 
@@ -65,7 +65,19 @@ BC 系列是 DirectX 生态中最主流的压缩格式，由 S3TC（DXT）发展
 - **支持通道**：RG（双通道独立）
 - **典型用途**：法线贴图（R 存 X，G 存 Y，Shader 中重建 Z）、双通道遮罩
 
-据 [Microsoft DirectXTex Wiki](https://github.com/microsoft/DirectXTex/wiki/Compress) 描述，BC5 是压缩法线贴图时带宽与质量的最佳折中之一。
+据 [NVIDIA《Real-Time Normal Map DXT Compression》论文](https://developer.download.nvidia.com/whitepapers/2008/real-time-normal-map-dxt-compression.pdf) 与 [Microsoft Direct3D 11 Textures and Block Compression 博客](https://walbourn.github.io/direct3d-11-textures-and-block-compression/) 描述，BC5（3Dc）在所有 DirectX 10 兼容硬件上是切线空间法线贴图质量最优的格式，并专为法线贴图等双通道数据设计，是带宽与质量的最佳折中之一。注：DirectXTex Wiki 的 Compress 页面本身并未给出此评价。
+
+### BC6H（BPTC HDR）
+
+- **数据量**：128 bits / 4×4 block（**8 bpp**）
+- **结构**：14 种模式（mode 0–13）；前 10 种模式为双区域（2 个子集），带 5-bit 分区索引（共 32 种分区），后 4 种模式为单区域
+- **端点精度**：依模式不同，RGB 端点以固定位宽的量化整数编码（如 10.555、16.4 等，分别表示基准端点精度位数与 delta 偏移位数，如 16.4 即 16 位基准端点 + 4 位 delta），解码时反量化为 16-bit 并按半浮点（half）重新解释；多数模式使用 delta 变换压缩第二个端点
+- **支持通道**：RGB（无 alpha，解码时 alpha 恒为 1.0）
+- **特点**：专为 HDR 数据设计（源数据为 16:16:16 半浮点）；支持浮点 denormal，但不支持 INF/NaN（有符号模式可解码出 -INF，但仅是格式产物，编码器通常不利用）
+- **硬件要求**：DirectX 11 Feature Level 11_0 及以上
+- **典型用途**：HDR 天空盒、光照贴图、环境贴图
+
+据 [Microsoft BC6H Format 文档](https://learn.microsoft.com/en-us/windows/win32/direct3d11/bc6h-format) 描述，BC6H 编码器遇到 INF/NaN 输入时应转换为最大可表示的非 INF 值，并将 NaN 映射为 0；BC6H 解码必须先解压再滤波，且硬件解码结果必须与规范描述逐位一致（bit-accurate）。与 BC7 不同，BC6H 没有 3 子集分区模式。Vulkan 侧对应 `VK_FORMAT_BC6H_UFLOAT_BLOCK` 与 `VK_FORMAT_BC6H_SFLOAT_BLOCK`。
 
 ### BC7（BPTC）
 
@@ -87,6 +99,7 @@ BC7 的 8 种模式在 [Khronos Data Format Specification](https://registry.khro
 | BC3 | DXT5 | 8 | RGBA | 8-bit 插值 | 透明漫反射 |
 | BC4 | RGTC1 | 4 | R | 无 | 单通道数据（高度、粗糙度等）|
 | BC5 | RGTC2 | 8 | RG | 无 | 法线贴图、RG 遮罩 |
+| BC6H | BPTC | 8 | RGB | 无 | HDR 贴图（天空盒、光照贴图）|
 | BC7 | BPTC | 8 | RGBA | 模式可变 | 高品质 RGBA |
 
 ## ETC 系列（Ericsson Texture Compression）
@@ -155,7 +168,7 @@ PVRTC 由 Imagination Technologies 开发，是 PowerVR GPU 的原生格式，�
 
 ### 硬件与生态
 
-- **主要平台**：早期 iOS 设备（A7 之前）、部分 Android PowerVR GPU
+- **主要平台**：iOS 设备（自 iPhone 3GS 起所有 iOS 设备均硬件支持，A8 引入 ASTC 之前的世代——含 A7——是唯一主流压缩格式）与部分 Android PowerVR GPU（SGX530/540，如 Galaxy S、Nexus S 等）
 - **加载枚举**（OpenGL ES 扩展 `GL_IMG_texture_compression_pvrtc`）：
   - `GL_COMPRESSED_RGB_PVRTC_4BPPV1_IMG`
   - `GL_COMPRESSED_RGBA_PVRTC_4BPPV1_IMG`
@@ -232,6 +245,7 @@ Arm 提供开源参考编解码器 [**astcenc**](https://github.com/ARM-software
 | PC/主机不透明漫反射 | BC7 / BC1 | BC7 质量最高；BC1 最小 |
 | PC/主机透明漫反射 | BC7 / BC3 | BC7 无 banding；BC3 兼容更广 |
 | PC/主机法线 | BC5 / BC7 | BC5 带宽最优；BC7 质量最高 |
+| PC/主机 HDR 贴图（天空盒/光照） | BC6H | HDR 半浮点数据专用格式 |
 | Android 通用（GLES 3.0+）| ETC2 | 强制支持，无兼容性风险 |
 | Android 高品质/法线 | ASTC 4×4~6×6 | 灵活码率，质量显著优于 ETC2 |
 | iOS（现代 A8+）| ASTC | 硬件支持，取代 PVRTC |
@@ -245,9 +259,10 @@ Arm 提供开源参考编解码器 [**astcenc**](https://github.com/ARM-software
 - [Khronos Data Format Specification](https://registry.khronos.org/DataFormat/specs/1.3/dataformat.1.3.html) — BC1–BC7、ETC2、EAC、ASTC 的位域级规范定义
 - [Arm ASTC Compression Formats](https://developer.arm.com/documentation/102162/latest) — ASTC 技术细节与 Mali GPU 纹理压缩指南
 - [Microsoft DirectXTex Compress Wiki](https://github.com/microsoft/DirectXTex/wiki/Compress) — BC 格式压缩 API 与实现说明
+- [Microsoft BC6H Format](https://learn.microsoft.com/en-us/windows/win32/direct3d11/bc6h-format) — BC6H 格式结构、14 种模式与解码说明
 - [Arm ASTC Encoder (astcenc) GitHub](https://github.com/ARM-software/astc-encoder) — 开源编解码器源码与格式文档
 - [Imagination PVRTC 文档](https://docs.imgtec.com/tools-manuals/pvrtextool-manual/html/index.html)（PVRTC 专题见 [PVRTC 指南](https://docs.imgtec.com/performance-guides/graphics-recommendations/html/topics/pvrtc/texture-compression-using-pvrtc.html)） — PVRTC 算法原理与编码说明
 - [Imagination PVRTexTool](https://docs.imgtec.com/tools-manuals/pvrtextool-manual/html/topics/introduction.html)（产品页：https://developer.imaginationtech.com/solutions/pvrtextool/ ） — 官方纹理压缩工具
 - [NVIDIA ASTC Texture Compression for Game Assets](https://developer.nvidia.com/astc-texture-compression-for-game-assets) — ASTC 在游戏资源中的应用建议
 
-> **📋 事实核查**：本文于 2026-06-30 经 exa 多源核查，共 45 条陈述（✅ 40 正确 / ❌ 5 有误 / ❓ 0 存疑，已修正 5 处）。
+> **📋 事实核查**：本文于 2026-08-13 经 exa 多源核查，共 81 条陈述（✅ 77 正确 / ❌ 4 有误 / ❓ 0 存疑，已修正 4 处）。
