@@ -1,0 +1,32 @@
+flowchart TD
+    classDef gate fill:#fbcfe8,stroke:#db2777,color:#333
+    classDef act fill:#bbf7d0,stroke:#16a34a,color:#333
+    classDef cli fill:#bfdbfe,stroke:#2563eb,color:#333
+    classDef out fill:#ddd6fe,stroke:#7c3aed,color:#333
+
+    A0(["capture.rdc + EID"]):::out --> A1
+
+    A1["① 基线像素测试<br/>tools/harness.py pixel --samples 100 --seed 42<br/>输入：capture.rdc + EID<br/>输出：verdict（像素差≤容差4）+ simplified.hlsl 落盘（保真链）"]:::cli --> A1g{像素差 ≤ 容差4?}:::gate
+    A1g -- 否 --> A1f["debug 定位是哪个 pass 引入差异<br/>（simplify-bug-diagnose）"]:::act --> A1
+    A1g -- 是 --> A2
+
+    A1 -. "① 落盘产物（保真链）是 ⑤ 改名链的唯一输入（可读链带 space0 不兼容）" .-> A4
+
+    A2["② 绑定 + 反射<br/>rdc shader --reflect / rdc bindings<br/>输入：EID<br/>输出：cbuffer 清单（名·bind·大小）+ 纹理/UAV 清单"]:::cli --> A25
+    A25["③ 资源名即语义<br/>rdc shader-map / resource / descriptors<br/>输入：EID → shader_id<br/>输出：shader 名 + 每纹理真实资源名·格式·尺寸"]:::cli --> A3
+    A3["④ cbuffer 运行时值<br/>rdc cbuffer --stage ps --set 0 --binding N --json<br/>或 gen_semantic_db.py → semantic_db.json 对照数据包<br/>输入：EID + cbuffer 清单<br/>输出：每成员（reflection 名·packoffset·float4 值）"]:::cli --> A4
+    A4["⑤ 取简化 HLSL<br/>改名链：拷 ① 落盘产物 → proj/_generate/simplified.hlsl（必须——可读链带 space0，与 rename/fxc 不兼容）<br/>阅读用：rdc decompile-shader -s pixel -e &lt;EID&gt; --simplify --json"]:::cli --> A5
+    A5["⑥ 语义分析<br/>变量名 ↔ ④ 运行时值 ↔ ③ 资源名 交叉对照<br/>输入：proj/_generate/simplified.hlsl（⑤ 拷贝）+ 运行时值 + 资源名<br/>输出：rename_semantic.py（MEMBER/ARRAY/ACCESS/RESOURCE_RENAMES + CBUFFER_RENAMES）"]:::act --> A6
+    A6["⑦ 生成重命名 HLSL<br/>rename_semantic.py → _generate/simplified_renamed_ssa.hlsl（SSA 版，注入主体）<br/>make_readable.py → output/simplified_renamed.hlsl（可读版）<br/>输入：proj/_generate/simplified.hlsl + RENAMES<br/>输出：SSA 版 + 可读版两产物"]:::act --> A7
+    A7["⑧ dxc 编译验证<br/>dxc -spirv -T ps_6_0 -E main -Fo .spv<br/>输入：simplified_renamed.hlsl（可读版）<br/>输出：.spv（仅 Vulkan 注入消费；D3D 流程验证走 fxc DXBC）"]:::cli --> A8
+
+    A8["⑨ 像素注入验证<br/>重注入原始字节码自检 + 注入重命名版对比"]:::gate --> A8g{Vulkan / D3D?}:::gate
+    A8g -- Vulkan --> A8v["tools/harness.py pixel --inject-spv<br/>输入：renamed.spv + capture + EID<br/>输出：逐像素对比 PASS / FAIL"]:::cli
+    A8g -- D3D11/12 --> A8d["verify_inject.py --dxbc 位级注入<br/>输入：renamed_ssa.dxbc（fxc 编译）+ baseline simplified.hlsl 对照<br/>输出：verify_report.json（36 点，新差异分离）<br/>⚠️ --eid 必传；--compare 传 baseline（与改名输入同一份）"]:::cli
+    A8v --> A8g2{PASS?}:::gate
+    A8d --> A8g2
+    A8g2 -- 否 --> A8f["修重命名 / 保真问题"]:::act --> A4
+    A8g2 -- 是 --> A9
+
+    A9["⑩ 绑定完整性<br/>rg register 声明<br/>输入：simplified_renamed.hlsl<br/>输出：register 与原始 DescriptorSet 一致（缺 spaceN 则补）"]:::cli --> A10
+    A10["⑪ 整理产出 & 提交<br/>git commit<br/>输入：output/ + _generate/ 全部产物<br/>输出：proj/&lt;project&gt;/（交付 + 留痕 + README）"]:::out

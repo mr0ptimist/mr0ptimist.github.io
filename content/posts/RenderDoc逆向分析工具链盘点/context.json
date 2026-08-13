@@ -31,5 +31,5 @@
             "note": "依赖矩阵校验真理源（文章 mermaid 图依据）"
         }
     ],
-    "notes": "2026-08-12 群智核查（swarm）后同步：pass 数 29/40 为 --list-passes 实测，工具分组 11 模块，simplify_subprocess 与 simplify_cli 双视角命名已统一。"
+    "notes": "2026-08-12 两轮群智核查（swarm）后同步：pass 数 29/40 为 --list-passes 实测，工具分组 11 模块，simplify_subprocess 与 simplify_cli 双视角命名已统一；第二轮核查修正 shader_rename 术语（反射级，语义级为 rename_semantic.py）、Patcher 规则数 170/4、工具表补 hlsl_decompiler 行、端到端图补 SRE 节点等（RDC/_doc/dependency-chain.md 与 RenderdocPatcher/CLAUDE.md 已同步修正）。第三轮核查（2026-08-13，以代码为基准）：73 条陈述 71 证实 / 2 驳斥；已修正 urp_verify_dxc.py 编译目标（SM6.0 出 DXIL）与 flow-reverse-engineering.mmd 中 rename_semantic 的真实 dict 名（MEMBER/ARRAY/ACCESS/RESOURCE_RENAMES + CBUFFER_RENAMES）；rename_semantic.py 拷贝数一条（实测 5 份）经用户决定正文不写拷贝数量数字、改列各工程目录名（endfield-deferred / endfield-transparent / genshin-firmament-glass / genshin-firmament-glass-f20157 / flow-e2e-5999），避免目录增删后数字失真。"
 }
