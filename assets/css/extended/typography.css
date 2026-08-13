@@ -28,13 +28,14 @@
   line-height: 1.3;
 }
 
-/* 小字号（16px 以下）不再负字距，接近 0 */
+/* 小字号（22px 以下）不再负字距，接近 0 */
 .post-content h4,
 .post-content h5,
 .post-content h6 {
   letter-spacing: 0;
 }
 
-.post-content h4 { font-size: 1rem; }         /* 16px @100% */
-.post-content h5 { font-size: 0.875rem; }     /* 14px @100% */
-.post-content h6 { font-size: 0.75rem; }      /* 12px @100% */
+/* 保持 encryption.css 的 22/18/14px 设计值（主题默认 16px 对 h4 太小），转 rem 随用户字号缩放 */
+.post-content h4 { font-size: 1.375rem; }    /* 22px @100% */
+.post-content h5 { font-size: 1.125rem; }    /* 18px @100% */
+.post-content h6 { font-size: 0.875rem; }    /* 14px @100% */

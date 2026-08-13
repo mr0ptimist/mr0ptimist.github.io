@@ -1,0 +1,111 @@
+/* ============================================================
+   Apple 设计引入（SKILL.md）
+   §3/§4  章节折叠/展开平滑动画（Apple 曲线，替换主题 150ms ease）
+   §1/§10 按压反馈（pointer-down 即时反馈）
+   §14    主题切换平滑过渡（避免亮度跳变）
+   §12    毛玻璃 sticky 头部（+ §14 reduced-transparency 降级）
+   ⚠️ extended CSS 按文件名排序加载，本文件排最前，
+      覆盖同特异性规则需提高选择器特异性（body 前缀 / 元素前缀）
+   ============================================================ */
+
+/* ---- §3/§4：章节折叠/展开动画 ----
+   PaperMod 已内置 ::details-content 高度过渡（150ms ease），这里替换为 Apple 系曲线。
+   仅折叠方向动画：打开态禁用过渡——动态内容（mermaid Ctrl+滚轮缩放、
+   图片查看器滑杆、可拖拽 iframe）在打开状态下高度变化时实时生效，不产生延迟（§1） */
+.post-content details.collapsible-section:not([open])::details-content,
+.post-content details.subsection:not([open])::details-content,
+.post-content details.subsubsection:not([open])::details-content {
+  transition: height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.22s ease,
+    content-visibility 0.32s allow-discrete;
+}
+.post-content details.collapsible-section[open]::details-content,
+.post-content details.subsection[open]::details-content,
+.post-content details.subsubsection[open]::details-content {
+  transition: none;
+}
+
+/* ---- §1/§10：按压反馈（pointer-down 即时，release 后 100ms 回弹） ---- */
+button.collapse-all-btn,
+.header .width-toggle,
+.header .theme-toggle,
+.sort-bar .sort-btn {
+  transition: transform 100ms ease-out, color 0.2s;
+}
+button.collapse-all-btn:active,
+.header .width-toggle:active,
+.header .theme-toggle:active,
+.sort-bar .sort-btn:active {
+  transform: scale(0.93);
+}
+
+.ptree-list .ptree-summary,
+.ptree-list .ptree-link {
+  transition: transform 100ms ease-out, background 0.15s, color 0.15s, border-color 0.15s;
+}
+.ptree-list .ptree-summary:active,
+.ptree-list .ptree-link:active {
+  transform: scale(0.99);
+}
+
+.post-content details.collapsible-section > summary:active {
+  background: var(--border);
+  border-radius: 8px;
+}
+.collapse-body .subsection > summary:active,
+.collapse-body .subsubsection > summary:active,
+.subsection-body .subsubsection > summary:active {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+/* ---- §14：主题切换平滑过渡（只动画颜色，不动布局属性） ---- */
+body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+body .header,
+body .post-entry,
+.post-content details.collapsible-section {
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* ---- §12：毛玻璃 sticky 头部 ----
+   header 已 sticky（encryption.css），这里把实底改为半透明 + 背景模糊，
+   正文滚动时从头部下透出模糊 —— 材质随内容流动 */
+body .header {
+  background: color-mix(in srgb, var(--theme) 62%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  /* §12 滚动边缘：细分隔线软化，避免硬边框 */
+  border-bottom-color: color-mix(in srgb, var(--border) 60%, transparent);
+}
+[data-theme="dark"] body .header {
+  /* 深色材质更实（§12：重的材质分隔结构区域） */
+  background: color-mix(in srgb, var(--theme) 72%, transparent);
+}
+
+/* 宽度调节弹窗卡片同样玻璃化 */
+body .width-panel-inner {
+  background: color-mix(in srgb, var(--theme) 72%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+
+/* ---- §14：兼容降级 ----
+   不支持 backdrop-filter → 实底；用户减弱透明度 → 实底 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  body .header { background: var(--theme); }
+  body .width-panel-inner { background: var(--theme); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  body .header {
+    background: var(--theme);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  body .width-panel-inner {
+    background: var(--theme);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
