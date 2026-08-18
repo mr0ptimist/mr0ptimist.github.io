@@ -14,10 +14,21 @@ flowchart TD
 
     A2["② 绑定 + 反射<br/>rdc shader --reflect / rdc bindings<br/>输入：EID<br/>输出：cbuffer 清单（名·bind·大小）+ 纹理/UAV 清单"]:::cli --> A25
     A25["③ 资源名即语义<br/>rdc shader-map / resource / descriptors<br/>输入：EID → shader_id<br/>输出：shader 名 + 每纹理真实资源名·格式·尺寸"]:::cli --> A3
-    A3["④ cbuffer 运行时值<br/>rdc cbuffer --stage ps --set 0 --binding N --json<br/>或 gen_semantic_db.py → semantic_db.json 对照数据包<br/>输入：EID + cbuffer 清单<br/>输出：每成员（reflection 名·packoffset·float4 值）"]:::cli --> A4
+    A3["④ cbuffer 运行时值<br/>rdc cbuffer --stage ps --set 0 --binding N --json<br/>⚠️ 反射布局≠内存布局——语义对照以 --raw -o 原始字节解码为准<br/>或 gen_semantic_db.py → semantic_db.json 对照数据包<br/>输入：EID + cbuffer 清单<br/>输出：每成员（reflection 名·packoffset·float4 值）"]:::cli --> A4
     A4["⑤ 取简化 HLSL<br/>改名链：拷 ① 落盘产物 → proj/_generate/simplified.hlsl<br/>（必须——可读链带 space0，与 rename/fxc 不兼容）<br/>阅读用：rdc decompile-shader -s pixel -e &lt;EID&gt;<br/>--simplify --json"]:::cli --> A5
     A5["⑥ 语义分析<br/>变量名 ↔ ④ 运行时值 ↔ ③ 资源名 交叉对照<br/>输入：proj/_generate/simplified.hlsl（⑤ 拷贝）<br/>+ 运行时值 + 资源名<br/>输出：rename_semantic.py<br/>（MEMBER/ARRAY/ACCESS/RESOURCE_RENAMES<br/>+ CBUFFER_RENAMES）"]:::act --> A6
-    A6["⑦ 生成重命名 HLSL<br/>rename_semantic.py →<br/>_generate/simplified_renamed_ssa.hlsl<br/>（SSA 版，注入主体）<br/>make_readable.py →<br/>output/simplified_renamed.hlsl（可读版）<br/>输入：proj/_generate/simplified.hlsl + RENAMES<br/>输出：SSA 版 + 可读版两产物"]:::act --> A7
+    A6["⑦ 生成重命名 HLSL<br/>rename_semantic.py →<br/>_generate/simplified_renamed_ssa.hlsl<br/>（SSA 版，注入主体）<br/>make_readable.py →<br/>output/simplified_renamed.hlsl（可读版）<br/>输入：proj/_generate/simplified.hlsl + RENAMES<br/>输出：SSA 版 + 可读版两产物"]:::act --> A6g
+
+    A6g{位级闸门<br/>fxc -O0 编译两版<br/>DXBC 哈希一致?}:::gate
+    A6g -- 否 --> A6f["修 make_readable.py 切分<br/>（机械化切分不改指令序列）"]:::act --> A6
+    A6g -- 是 --> A7
+
+    A6 --> A6x
+    A6x["⑥.5 LLM 完全转述（人类可读主交付，可选）<br/>transcribe.py split（切分+in/out 契约）<br/>→ Workflow 全局理解 + N 段并行转述<br/>→ assemble 自动三检（变量名统一/撞名/未声明）<br/>→ output/simplified_transcribed.hlsl（像手写 shader）<br/>输入：可读版 + RENAMES + 语义库 + 分析文档<br/>⚠️ 数学等价底线：mad 保留 / 不动运算顺序"]:::act --> A6xg
+    A6xg{GPU 验证<br/>量化容差 ≤ 4?<br/>（D3D: fxc+verify_inject<br/>Vulkan: dxc+harness）}:::gate
+    A6xg -- 否 --> A6xf["按段数学审查<br/>（LLM 展开错误定位→修段重验）"]:::act --> A6x
+    A6xg -- 是 --> A6xd["转述版交付（与位级版并存）<br/>差异 ~1-4/255 记录为编译器差异"]:::out
+
     A7["⑧ dxc 编译验证<br/>dxc -spirv -T ps_6_0 -E main -Fo .spv<br/>输入：simplified_renamed.hlsl（可读版）<br/>输出：.spv（仅 Vulkan 注入消费；D3D 流程验证走 fxc DXBC）"]:::cli --> A8
 
     A8["⑨ 像素注入验证<br/>重注入原始字节码自检 + 注入重命名版对比"]:::gate --> A8g{Vulkan / D3D?}:::gate
@@ -29,4 +40,4 @@ flowchart TD
     A8g2 -- 是 --> A9
 
     A9["⑩ 绑定完整性<br/>rg register 声明<br/>输入：simplified_renamed.hlsl<br/>输出：register 与原始 DescriptorSet 一致（缺 spaceN 则补）"]:::cli --> A10
-    A10["⑪ 整理产出 & 提交<br/>git commit<br/>输入：output/ + _generate/ 全部产物<br/>输出：proj/&lt;project&gt;/（交付 + 留痕 + README）"]:::out
+    A10["⑪ 整理产出<br/>⚠️ proj/ 不入 git——产物留工作树（交付 + 留痕 + README）<br/>仅 skill/_src 通用脚本改动才 git commit"]:::out
