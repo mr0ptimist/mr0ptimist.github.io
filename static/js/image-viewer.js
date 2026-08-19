@@ -79,6 +79,11 @@
         if (!dds) return;
         var mip0 = dds.getMip(0);
         if (!mip0) return;
+        // 单通道缩略图同样按 R 通道着色（与文章内查看器一致）
+        var chm = chMapFromDxgi(dds.fmt.dxgi);
+        if (chm.R && !chm.G && !chm.B) {
+          for (var gi = 1; gi < mip0.length; gi += 4) { mip0[gi] = 0; mip0[gi+1] = 0; }
+        }
         // Wait a tick for JSON to arrive
         setTimeout(function(){ doThumb(mip0, dds.w, dds.h); }, 50);
       }).catch(function(){});
@@ -105,7 +110,7 @@
     var nextWorker = 0;
 
     var myScript = document.querySelector('script[src*="image-viewer.js"]');
-    var workerUrl = myScript ? myScript.src.replace(/image-viewer\.js(\?[^"]*)?$/, 'decode-worker.js?v=22') : '/js/decode-worker.js?v=22';
+    var workerUrl = myScript ? myScript.src.replace(/image-viewer\.js(\?[^"]*)?$/, 'decode-worker.js?v=23') : '/js/decode-worker.js?v=23';
 
     for (var i = 0; i < NUM_WORKERS; i++) {
       var w = new Worker(workerUrl);
@@ -180,6 +185,14 @@
     if (ddsInfo0) { normMin = ddsInfo0.normMin || 0; normMax = ddsInfo0.normMax || 1; rawPixels = ddsInfo0.rawPixels; fam0 = ddsInfo0.dds ? ddsInfo0.dds.fmt.family : ''; }
     else if (exrInfo0) { normMin = exrInfo0.normMin || 0; normMax = exrInfo0.normMax || 1; rawPixels = exrInfo0.rawPixels; fam0 = 'EXR'; }
     curLo = normMin; curHi = normMax;
+    // 单通道格式（BC4/R8/R16/R32F/D32S8 等）：按 R 通道着色（RenderDoc 风格）——
+    // G/B 清零，默认 RGB 视图呈红色，点 R 通道按钮才看灰度
+    if (ddsInfo0 && ddsInfo0.dds && straight) {
+      var chm0 = chMapFromDxgi(ddsInfo0.dds.fmt.dxgi);
+      if (chm0.R && !chm0.G && !chm0.B) {
+        for (var gi = 1; gi < straight.length; gi += 4) { straight[gi] = 0; straight[gi+1] = 0; }
+      }
+    }
     var wrapper = document.createElement('div');
     wrapper.className = 'channel-container';
 
@@ -555,8 +568,7 @@
         if (ch === 'RGB' || btn.classList.contains('flip-btn') || btn.classList.contains('sampling-btn')) return;
         if (!(ch === 'RGBA' ? chMap.A : chMap[ch])) btn.style.display = 'none';
       });
-      var onlyR = chMap.R && !chMap.G && !chMap.B;
-      var defBtn = tb.querySelector(onlyR ? '[data-ch=R]' : '[data-ch=RGB]');
+      var defBtn = tb.querySelector('[data-ch=RGB]');
       if (defBtn) defBtn.click();
     } else {
       var defBtn = tb.querySelector('[data-ch=RGB]');
