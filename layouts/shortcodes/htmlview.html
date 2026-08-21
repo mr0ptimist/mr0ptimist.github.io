@@ -1,0 +1,92 @@
+{{- $src    := .Get "src" -}}
+{{- $height := .Get "height" | default "700" -}}
+{{- $title  := .Get "title" | default "交互演示" -}}
+{{- $uid    := .Ordinal -}}
+
+{{- $absPath  := "" -}}
+{{- $frameSrc := "" -}}
+{{- $b64      := "" -}}
+
+{{- /* 模式 1（首选）：static/{src} → 真实 URL，iframe 直接引用，可单独打开/收藏 */ -}}
+{{- $staticPath := printf "static/%s" $src -}}
+{{- if fileExists $staticPath -}}
+  {{- $frameSrc = printf "/%s" $src -}}
+  {{- if site.Params.vscodeContentBase -}}
+    {{- $base := strings.TrimSuffix "/" site.Params.vscodeContentBase -}}
+    {{- $absPath = printf "%s/%s" $base $staticPath -}}
+  {{- end -}}
+{{- /* 模式 2（回退）：bundle 内文件 → base64 + Blob URL（Hugo 不发布 bundle 内 .html，仅内嵌可用） */ -}}
+{{- else if and .Page.File -}}
+  {{- $dir   := path.Dir .Page.File.Path -}}
+  {{- $fpath := printf "content/%s/%s" $dir $src -}}
+  {{- if fileExists $fpath -}}
+    {{- $raw := os.ReadFile $fpath -}}
+    {{- $b64 = base64Encode $raw -}}
+    {{- if site.Params.vscodeContentBase -}}
+      {{- $base := strings.TrimSuffix "/" site.Params.vscodeContentBase -}}
+      {{- $absPath = printf "%s/%s" $base $fpath -}}
+    {{- end -}}
+  {{- else -}}
+    {{- errorf "htmlview shortcode: file not found (static/%s or content/%s/%s)" $src $dir $src -}}
+  {{- end -}}
+{{- else -}}
+  {{- errorf "htmlview shortcode: no page context available" -}}
+{{- end -}}
+
+<div class="htmlview-wrap" id="htmlview-wrap-{{ $uid }}"
+  style="width:100%;max-width:100%;min-width:280px;margin:1.5em 0;
+  border:1px solid var(--border);border-radius:8px;overflow:hidden;
+  resize:vertical;min-height:300px;max-height:95vh;">
+  <div class="htmlview-toolbar" style="display:flex;align-items:center;gap:8px;
+    padding:6px 12px;background:var(--code-bg);border-bottom:1px solid var(--border);
+    font-size:12px;color:var(--secondary);">
+    <span>🖥️ {{ $title }}: <code>{{ $src }}</code></span>
+    <span style="flex:1"></span>
+    <button id="htmlview-open-{{ $uid }}" class="collapse-all-btn" title="在新窗口打开"
+      style="color:var(--secondary);display:none;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"></path>
+        <path d="M15 3h6v6"></path>
+        <path d="M10 14L21 3"></path>
+      </svg>
+    </button>
+    {{- if $absPath }}
+    <button class="collapse-all-btn" title="在资源管理器中选中"
+      data-dev-action="explore-file" data-dev-path="{{ $absPath }}" onclick="devAction(this)"
+      style="color:var(--secondary);">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"></path>
+      </svg>
+    </button>
+    {{- end }}
+  </div>
+  <iframe id="htmlview-frame-{{ $uid }}"
+    style="width:100%;height:{{ $height }}px;border:0;display:block;"
+    title="{{ $title }}"></iframe>
+</div>
+<script>
+(function() {
+  var uid = '{{ $uid }}';
+  var frameSrc = '{{ $frameSrc }}';
+  var b64 = '{{ $b64 }}';
+  var iframe = document.getElementById('htmlview-frame-' + uid);
+  if (!iframe) return;
+  if (frameSrc) {
+    iframe.src = frameSrc;
+  } else if (b64) {
+    var binary = atob(b64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
+    var html = new TextDecoder('utf-8').decode(bytes);
+    var blob = new Blob([html], { type: 'text/html' });
+    iframe.src = URL.createObjectURL(blob);
+  }
+  var btn = document.getElementById('htmlview-open-' + uid);
+  if (btn) {
+    btn.style.display = '';
+    btn.addEventListener('click', function() { window.open(iframe.src, '_blank'); });
+  }
+})();
+</script>
