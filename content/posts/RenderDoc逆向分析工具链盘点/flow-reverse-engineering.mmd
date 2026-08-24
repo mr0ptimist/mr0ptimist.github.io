@@ -13,10 +13,13 @@ flowchart TD
     A1 -. "① 落盘产物（保真链）是<br/>⑤ 改名链的唯一输入<br/>（可读链带 space0 不兼容）" .-> A4
 
     A2["② 绑定 + 反射<br/>rdc shader --reflect / rdc bindings<br/>输入：EID<br/>输出：cbuffer 清单（名·bind·大小）+ 纹理/UAV 清单"]:::cli --> A25
-    A25["③ 资源名即语义<br/>rdc shader-map / resource / descriptors<br/>输入：EID → shader_id<br/>输出：shader 名 + 每纹理真实资源名·格式·尺寸"]:::cli --> A3
+    A25["③ 资源名即语义<br/>rdc shader-map / resource / descriptors<br/>输入：EID → shader_id<br/>输出：shader 名 + 每纹理真实资源名·格式·尺寸"]:::cli --> A25b
+    A25b["③.5 导出贴图/RT 素材（视觉证据线前置）<br/>export_resources.py 一条命令（RDC 根执行，任意 cwd 已锚定）：<br/>rt+resource 双格式 rdc 直导 + PNG 钳长边 1024 + 缩略图<br/>DDS = 数值/格式保真线；PNG = 视觉对照线（模型直接 Read 猜语义）<br/>⚠️ 禁 DDS→PNG（texconv 对 legacy 头报 0x80070032）<br/>输入：descriptors tsv + 已开 capture 会话<br/>输出：output/resource/png/*.png + output/rt/*.png"]:::cli --> A25c
+    A25c["③.6 贴图视觉语义（与 ⑤⑥ 并行的证据线）<br/>tex-semantics workflow：5-6 张/组并行读图<br/>+ 汇总 agent 对齐 HLSL 层索引字段<br/>B 型：cbuffer 字段值 + 材质基址加法对位；A 型：白手语义草稿<br/>铁律：猜图 agent 只喂 png 路径 + 元数据；<br/>汇总不读 _doc/semantic_db/article/rename（防抄答案）；<br/>恒值/纯黑 = 占位或捕获帧未写入（置信 ≤0.5 不硬编）<br/>输出：语义重命名表 + group_insights + friction_points<br/>（texsem2article verify/gen ↔ article_semantics.json）"]:::act
+    A25c -. "语义证据与 ④ 运行时值、③ 资源名一起<br/>供 ⑥ 语义分析交叉对照（cb 变量语义为唯一定名依据）" .-> A5
     A3["④ cbuffer 运行时值<br/>rdc cbuffer --stage ps --set 0 --binding N --json<br/>⚠️ 反射布局≠内存布局——语义对照以 --raw -o 原始字节解码为准<br/>或 gen_semantic_db.py → semantic_db.json 对照数据包<br/>输入：EID + cbuffer 清单<br/>输出：每成员（reflection 名·packoffset·float4 值）"]:::cli --> A4
     A4["⑤ 取简化 HLSL<br/>改名链：拷 ① 落盘产物 → proj/_generate/simplified.hlsl<br/>（必须——可读链带 space0，与 rename/fxc 不兼容）<br/>阅读用：rdc decompile-shader -s pixel -e &lt;EID&gt;<br/>--simplify --json"]:::cli --> A5
-    A5["⑥ 语义分析<br/>变量名 ↔ ④ 运行时值 ↔ ③ 资源名 交叉对照<br/>输入：proj/_generate/simplified.hlsl（⑤ 拷贝）<br/>+ 运行时值 + 资源名<br/>输出：rename_semantic.py<br/>（MEMBER/ARRAY/ACCESS/RESOURCE_RENAMES<br/>+ CBUFFER_RENAMES）"]:::act --> A6
+    A5["⑥ 语义分析<br/>变量名 ↔ ④ 运行时值 ↔ ③ 资源名 ↔ ③.6 视觉语义 交叉对照<br/>输入：proj/_generate/simplified.hlsl（⑤ 拷贝）<br/>+ 运行时值 + 资源名 + 视觉重命名表<br/>输出：rename_semantic.py<br/>（MEMBER/ARRAY/ACCESS/RESOURCE_RENAMES<br/>+ CBUFFER_RENAMES）"]:::act --> A6
     A6["⑦ 生成重命名 HLSL<br/>rename_semantic.py →<br/>_generate/simplified_renamed_ssa.hlsl<br/>（SSA 版，注入主体）<br/>make_readable.py →<br/>output/simplified_renamed.hlsl（可读版）<br/>输入：proj/_generate/simplified.hlsl + RENAMES<br/>输出：SSA 版 + 可读版两产物"]:::act --> A6g
 
     A6g{位级闸门<br/>fxc -O0 编译两版<br/>DXBC 哈希一致?}:::gate
@@ -40,4 +43,4 @@ flowchart TD
     A8g2 -- 是 --> A9
 
     A9["⑩ 绑定完整性<br/>rg register 声明<br/>输入：simplified_renamed.hlsl<br/>输出：register 与原始 DescriptorSet 一致（缺 spaceN 则补）"]:::cli --> A10
-    A10["⑪ 整理产出<br/>⚠️ proj/ 不入 git——产物留工作树（交付 + 留痕 + README）<br/>仅 skill/_src 通用脚本改动才 git commit"]:::out
+    A10["⑪ 整理产出<br/>⚠️ proj/ 不入 git——产物留工作树（交付 + 留痕 + README）<br/>仅 skill/_src 通用脚本改动才 git commit<br/>收尾：rdc --session &lt;s&gt; close --shutdown<br/>（普通 close 只撤会话，daemon 进程常驻不自退）"]:::out
