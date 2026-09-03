@@ -61,5 +61,5 @@
 ## ⚠️ page-shot.js 缓存纪律
 
 `layouts/_partials/header.html` 加载 `js/page-shot.js?v=N`（仅 dev + 文章页，html2canvas 紧随其后）。
-**修改 `page-shot.js` 后必须把 header.html 里的 `?v=N` 加 1**（现为 19）。
+**修改 `page-shot.js` 后必须把 header.html 里的 `?v=N` 加 1**（现为 21）。
 html2canvas 版本记录在 `static/vendor/CLAUDE.md`；升级后需重跑 CDP 实测（参考文件头注释里的兼容性策略）。

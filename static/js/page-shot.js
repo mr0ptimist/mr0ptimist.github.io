@@ -41,9 +41,8 @@
 
   var overlay = null;            // 弹窗根节点（懒构建）
   var busy = false;
-  var lastCanvas = null;         // 最近一次渲染结果（供下载）
+  var lastCanvas = null;         // 最近一次渲染结果（供下载/全屏预览）
   var lastOpts = null;
-  var previewNatW = 0;           // 预览图自然宽度（100% 模式用）
   var fullState = { open: false, zoom: 1, natW: 0, natH: 0, url: null, root: null, img: null, stage: null };
 
   // ---------------------------------------------------------------- helpers
@@ -136,20 +135,10 @@
         '</div>' +
         '<div class="ps-status"><span class="ps-spin"></span><span class="ps-status-text" id="ps-status-text"></span></div>' +
         '<div class="ps-result" id="ps-result" style="display:none">' +
-          '<div class="ps-preview-bar">' +
-            '<span class="ps-label">预览（下载文件为原尺寸）</span>' +
-            '<span class="ps-seg" id="ps-zoom">' +
-              '<label><input type="radio" name="ps-zoom" value="fit" checked><span>适应</span></label>' +
-              '<label><input type="radio" name="ps-zoom" value="full"><span>100%</span></label>' +
-            '</span>' +
-          '</div>' +
-          '<div class="ps-preview-scroll" id="ps-preview-scroll">' +
-            '<img id="ps-preview" alt="渲染预览">' +
-          '</div>' +
           '<div class="ps-meta" id="ps-meta"></div>' +
         '</div>' +
         '<div class="ps-foot">' +
-          '<button id="ps-fullbtn" class="ps-btn">🖥️ 全屏预览</button>' +
+          '<button id="ps-fullbtn" class="ps-btn" style="display:none">🖥️ 全屏预览</button>' +
           '<button id="ps-download" class="ps-btn primary" style="display:none">下载图片</button>' +
           '<button id="ps-run" class="ps-btn primary">渲染</button>' +
         '</div>' +
@@ -170,14 +159,12 @@
 
     qsaRoot(o, 'input[name="ps-scope"]').forEach(function (r) { r.addEventListener('change', syncScopeUI); });
     qsaRoot(o, 'input[name="ps-scale"]').forEach(function (r) { r.addEventListener('change', syncScopeUI); });
-    qsaRoot(o, 'input[name="ps-zoom"]').forEach(function (r) { r.addEventListener('change', syncZoomUI); });
     o.querySelector('#ps-format').addEventListener('change', syncFmtUI);
     o.querySelector('#ps-quality').addEventListener('input', function () {
       o.querySelector('#ps-quality-val').textContent = this.value;
     });
     o.querySelector('#ps-download').addEventListener('click', downloadResult);
     o.querySelector('#ps-fullbtn').addEventListener('click', openFull);
-    o.querySelector('#ps-preview').addEventListener('dblclick', openFull);
   }
   function qsaRoot(root, s) { return Array.prototype.slice.call(root.querySelectorAll(s)); }
 
@@ -198,22 +185,6 @@
     var f = overlay.querySelector('#ps-format').value;
     overlay.querySelector('#ps-quality-wrap').style.display = (f === 'png') ? 'none' : '';
   }
-  function syncZoomUI() {
-    if (!overlay || !previewNatW) return;
-    var z = overlay.querySelector('input[name="ps-zoom"]:checked');
-    if (!z) return;
-    var img = overlay.querySelector('#ps-preview');
-    var wrap = overlay.querySelector('#ps-preview-scroll');
-    if (z.value === 'full') {
-      img.style.width = previewNatW + 'px';
-      img.style.maxWidth = 'none';
-      wrap.scrollLeft = 0; wrap.scrollTop = 0;
-    } else {
-      img.style.width = '100%';
-      img.style.maxWidth = '100%';
-      wrap.scrollTop = 0;
-    }
-  }
 
   function open() {
     if (fullState.open) return;
@@ -221,6 +192,7 @@
     if (busy) return;
     lastCanvas = null; lastOpts = null;
     overlay.querySelector('#ps-result').style.display = 'none';
+    overlay.querySelector('#ps-fullbtn').style.display = 'none';
     overlay.querySelector('#ps-download').style.display = 'none';
     overlay.querySelector('#ps-run').style.display = '';
     overlay.querySelector('#ps-run').disabled = false;
@@ -712,57 +684,21 @@
     });
   }
 
-  // 分步降采样：每次减半再收尾，避免一步大比例缩放产生的混叠/糊
-  function makePreviewCanvas(src, maxW) {
-    var cur = src;
-    while (cur.width > maxW * 2) {
-      var nw = Math.max(1, Math.ceil(cur.width / 2));
-      var nh = Math.max(1, Math.ceil(cur.height / 2));
-      var n = document.createElement('canvas');
-      n.width = nw; n.height = nh;
-      var nctx = n.getContext('2d');
-      nctx.imageSmoothingEnabled = true;
-      nctx.imageSmoothingQuality = 'high';
-      nctx.drawImage(cur, 0, 0, nw, nh);
-      cur = n;
-    }
-    var fw = Math.round(maxW);
-    var fh = Math.max(1, Math.round(cur.height * maxW / cur.width));
-    var f = document.createElement('canvas');
-    f.width = fw; f.height = fh;
-    var fctx = f.getContext('2d');
-    fctx.imageSmoothingEnabled = true;
-    fctx.imageSmoothingQuality = 'high';
-    fctx.drawImage(cur, 0, 0, fw, fh);
-    return f;
-  }
-
   // ---- 结果展示 ----
   function showResult(res) {
     lastCanvas = res.canvas;
-    previewNatW = 0;
     var result = overlay.querySelector('#ps-result');
-    var preview = overlay.querySelector('#ps-preview');
-    var wrap = overlay.querySelector('#ps-preview-scroll');
-
-    var pv = makePreviewCanvas(res.canvas, 1000);
-    previewNatW = pv.width;
-    try { preview.src = pv.toDataURL('image/png'); } catch (e) { preview.removeAttribute('src'); }
-    // 重置为「适应」视图并滚回顶部
-    var fitRadio = overlay.querySelector('input[name="ps-zoom"][value="fit"]');
-    if (fitRadio) fitRadio.checked = true;
-    syncZoomUI();
-    if (wrap) { wrap.scrollTop = 0; wrap.scrollLeft = 0; }
 
     var f = overlay.querySelector('#ps-format').value;
     overlay.querySelector('#ps-meta').textContent = res.w + '×' + res.h + ' px · 倍率 ' + res.usedScale + '× · ' +
       f.toUpperCase() + ' · 耗时 ' + res.ms + ' ms';
     result.style.display = '';
+    overlay.querySelector('#ps-fullbtn').style.display = '';
     overlay.querySelector('#ps-download').style.display = '';
     overlay.querySelector('#ps-run').textContent = '重新渲染';
     overlay.querySelector('#ps-run').style.display = '';
     if (res.note) setStatus(res.note, false);
-    else setStatus('完成，点击「下载图片」保存。', false);
+    else setStatus('完成。点「全屏预览」查看大图，或「下载图片」保存。', false);
   }
 
   function fileName() {

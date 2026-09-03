@@ -153,32 +153,9 @@
 @keyframes ps-spin { to { transform: rotate(360deg); } }
 .ps-error { color: #e5484d; }
 
-/* 结果预览 */
+/* 结果元信息 */
 .ps-result {
-  margin: 0 16px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.ps-preview-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.ps-preview-bar .ps-seg span { padding: 3px 12px; font-size: 12px; }
-.ps-preview-scroll {
-  max-height: 58vh;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--code-bg);
-}
-.ps-preview-scroll img {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  height: auto;
+  margin: 0 16px 10px;
 }
 .ps-meta {
   font-size: 11px;
