@@ -9,6 +9,7 @@
 | KaTeX | 0.16.11 | `katex/` | 1.5MB |
 | Mermaid | 11 | `mermaid.min.js` | 3.4MB |
 | vis-network | 9 | `vis-network.min.js` | 606KB |
+| html2canvas | 1.4.1 | `html2canvas.min.js` | 194KB |
 
 ## 更新命令
 
@@ -34,6 +35,10 @@ curl -k -L -o static/vendor/mermaid.min.js "https://unpkg.com/mermaid@$VER/dist/
 # vis-network
 VER=9
 curl -k -L -o static/vendor/vis-network.min.js "https://unpkg.com/vis-network@$VER/standalone/umd/vis-network.min.js"
+
+# html2canvas（整页渲染为图片用，仅 dev 配置下的文章页加载）
+VER=1.4.1
+curl -k -L -o static/vendor/html2canvas.min.js "https://unpkg.com/html2canvas@$VER/dist/html2canvas.min.js"
 ```
 
 ## 注意事项

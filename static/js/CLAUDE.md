@@ -15,6 +15,7 @@
 | `sort-bar.js` | `<script>`（列表页） | 文章列表排序：树形/平铺双模式。通过 `window.SortBarConfig` 配置。 |
 | `mermaid-init.js` | `<script>`（按需，有 Mermaid 页面） | Mermaid 图表渲染：初始化配置、`<<interface>>` 修复、Dark Reader 防护。 |
 | `color-remap.js` | `<script>` | 颜色通道重映射工具。 |
+| `page-shot.js` | `<script>`（仅 dev 配置文章页，header.html） | 「渲染页面为图片」：html2canvas 长图/整页/屏幕截图 + 选项弹窗。`?v=N` 版本号。 |
 
 ## 加载顺序
 
@@ -56,3 +57,9 @@
 `layouts/_partials/extend_head.html` 加载 `js/mermaid-init.js?v=N`（无 hash URL，版本号手动维护）。
 **修改 `mermaid-init.js` 后必须把 `?v=N` 加 1**，否则浏览器缓存旧版（改 mermaid 相关功能无效时先查此项）。
 `mermaid.css` 改动与 `mermaid-init.js` 强耦合（布局/查看器），同批修改时两者都要验证。
+
+## ⚠️ page-shot.js 缓存纪律
+
+`layouts/_partials/header.html` 加载 `js/page-shot.js?v=N`（仅 dev + 文章页，html2canvas 紧随其后）。
+**修改 `page-shot.js` 后必须把 header.html 里的 `?v=N` 加 1**（现为 19）。
+html2canvas 版本记录在 `static/vendor/CLAUDE.md`；升级后需重跑 CDP 实测（参考文件头注释里的兼容性策略）。
