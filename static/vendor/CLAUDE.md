@@ -10,6 +10,7 @@
 | Mermaid | 11 | `mermaid.min.js` | 3.4MB |
 | vis-network | 9 | `vis-network.min.js` | 606KB |
 | html2canvas | 1.4.1 | `html2canvas.min.js` | 194KB |
+| modern-screenshot | 4.5.0 | `modern-screenshot.min.js` | 28KB |
 
 ## 更新命令
 
@@ -39,6 +40,11 @@ curl -k -L -o static/vendor/vis-network.min.js "https://unpkg.com/vis-network@$V
 # html2canvas（整页渲染为图片用，仅 dev 配置下的文章页加载）
 VER=1.4.1
 curl -k -L -o static/vendor/html2canvas.min.js "https://unpkg.com/html2canvas@$VER/dist/html2canvas.min.js"
+
+# modern-screenshot（原生渲染引擎：foreignObject 序列化，浏览器原生排版逐像素截图；
+# UMD 版暴露 window.modernScreenshot；升级后需重跑「原生引擎」实测）
+VER=4.5.0
+curl -k -L -o static/vendor/modern-screenshot.min.js "https://unpkg.com/modern-screenshot@$VER/dist/index.js"
 ```
 
 ## 注意事项

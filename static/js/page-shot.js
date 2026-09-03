@@ -102,6 +102,14 @@
             '<div class="ps-hint" id="ps-scope-hint"></div>' +
           '</div>' +
           '<div class="ps-row">' +
+            '<span class="ps-label">渲染引擎</span>' +
+            '<div class="ps-seg" id="ps-engine">' +
+              '<label><input type="radio" name="ps-engine" value="fast" checked><span>快速（html2canvas）</span></label>' +
+              '<label><input type="radio" name="ps-engine" value="native"><span>原生（逐像素一致）</span></label>' +
+            '</div>' +
+            '<div class="ps-hint">原生 = 浏览器排版引擎直接绘制（文字/加粗/药丸与屏幕一致），大页面约 20–60 秒；「当前屏幕」模式自动回退快速引擎。</div>' +
+          '</div>' +
+          '<div class="ps-row">' +
             '<span class="ps-label">倍率（输出尺寸 = 页面宽度 × 倍率）</span>' +
             '<div class="ps-seg" id="ps-scale">' +
               '<label><input type="radio" name="ps-scale" value="1"><span>1×</span></label>' +
@@ -237,6 +245,7 @@
   function collectOpts() {
     return {
       mode: overlay.querySelector('input[name="ps-scope"]:checked').value,
+      engine: overlay.querySelector('input[name="ps-engine"]:checked').value,
       scale: parseInt(overlay.querySelector('input[name="ps-scale"]:checked').value, 10) || 1,
       format: overlay.querySelector('#ps-format').value,
       quality: parseInt(overlay.querySelector('#ps-quality').value, 10) / 100,
@@ -490,6 +499,9 @@
     var undos = [];
     var originX = window.scrollX, originY = window.scrollY;
     var note = '';
+    // 原生引擎（foreignObject）：仅正文/整页；屏幕模式回退 html2canvas
+    var nativeEngine = opts.engine === 'native' && opts.mode !== 'screen' &&
+      typeof window.modernScreenshot !== 'undefined';
     // 渲染全程禁用平滑滚动（全局 html{scroll-behavior:smooth} 会与程序化滚动
     // 互相取消/冻结，导致滚动位置错乱），收尾时再还原
     var htmlEl = document.documentElement;
@@ -534,36 +546,58 @@
       var ignored = [];
       function ignoreEl(el) { if (el) ignored.push(el); }
 
-      if (opts.mode !== 'screen') {
-        ignoreEl(qs('details.toc'));
-        qsa('.top-link').forEach(ignoreEl);
-        var wp = qs('.width-panel'); if (wp) ignoreEl(wp);
-      }
-      if (opts.mode === 'page' && opts.hideToc) {
-        var main = qs('.main');
-        if (main) {
-          setStyle(main, 'marginLeft', 'auto');
-          setStyle(main, 'marginRight', 'auto');
+      if (!nativeEngine) {
+        if (opts.mode !== 'screen') {
+          ignoreEl(qs('details.toc'));
+          qsa('.top-link').forEach(ignoreEl);
+          var wp = qs('.width-panel'); if (wp) ignoreEl(wp);
+        }
+        if (opts.mode === 'page' && opts.hideToc) {
+          var main = qs('.main');
+          if (main) {
+            setStyle(main, 'marginLeft', 'auto');
+            setStyle(main, 'marginRight', 'auto');
+          }
+        }
+        if (opts.clean) {
+          qsa('.post-content .channel-toolbar, .post-content .channel-meta, .post-content .channel-size-badge, .post-content .channel-time-badge').forEach(ignoreEl);
+        } else {
+          // 角标已合成进光栅图，避免 DOM 原件在克隆里二次出现
+          qsa('.post-content .channel-size-badge, .post-content .channel-time-badge').forEach(ignoreEl);
+        }
+
+        // color-mix()/backdrop-filter → 实色
+        var themeCol = readVar('--theme');
+        var header = qs('.header');
+        if (header && themeCol) {
+          setStyle(header, 'background', themeCol);
+          setStyle(header, 'borderBottomColor', solidHeaderBorder());
+          setStyle(header, 'backdropFilter', 'none');
+          setStyle(header, 'webkitBackdropFilter', 'none');
+        }
+        var wpi = qs('.width-panel-inner');
+        if (wpi && themeCol) { setStyle(wpi, 'background', themeCol); }
+
+        // 查看器 canvas → dataURL img（含角标合成）；mermaid svg → dataURL img
+        pushUndo(rasterizeCanvases(opts.mode === 'screen', !opts.clean));
+        // 行内 code：保持原生文本布局，仅叠约定点药丸背景层（零叠字/换行风险）
+        pushUndo(patchCodePillStyles(opts.mode === 'screen'));
+        // mermaid FO 内部元素计算样式内联（svg-as-img 环境不加载站点 CSS）
+        pushUndo(inlineMermaidStyles());
+        pushUndo(rasterizeMermaid());
+      } else {
+        // 原生引擎：foreignObject 会随排版引擎一并绘制（无需任何补丁）；
+        // 仅“整页+隐藏目录”需要临时隐藏 TOC 并居中正文
+        if (opts.mode === 'page' && opts.hideToc) {
+          var tocN = qs('details.toc');
+          if (tocN) setStyle(tocN, 'display', 'none');
+          var mainN = qs('.main');
+          if (mainN) {
+            setStyle(mainN, 'marginLeft', 'auto');
+            setStyle(mainN, 'marginRight', 'auto');
+          }
         }
       }
-      if (opts.clean) {
-        qsa('.post-content .channel-toolbar, .post-content .channel-meta, .post-content .channel-size-badge, .post-content .channel-time-badge').forEach(ignoreEl);
-      } else {
-        // 角标已合成进光栅图，避免 DOM 原件在克隆里二次出现
-        qsa('.post-content .channel-size-badge, .post-content .channel-time-badge').forEach(ignoreEl);
-      }
-
-      // color-mix()/backdrop-filter → 实色
-      var themeCol = readVar('--theme');
-      var header = qs('.header');
-      if (header && themeCol) {
-        setStyle(header, 'background', themeCol);
-        setStyle(header, 'borderBottomColor', solidHeaderBorder());
-        setStyle(header, 'backdropFilter', 'none');
-        setStyle(header, 'webkitBackdropFilter', 'none');
-      }
-      var wpi = qs('.width-panel-inner');
-      if (wpi && themeCol) { setStyle(wpi, 'background', themeCol); }
 
       // 弹窗本体移出 DOM
       if (overlay && overlay.parentNode === document.body) {
@@ -571,14 +605,6 @@
         document.body.removeChild(host);
         pushUndo(function () { if (host.parentNode !== document.body) document.body.appendChild(host); });
       }
-
-      // 查看器 canvas → dataURL img（含角标合成）；mermaid svg → dataURL img
-      pushUndo(rasterizeCanvases(opts.mode === 'screen', !opts.clean));
-      // 行内 code：保持原生文本布局，仅叠约定点药丸背景层（零叠字/换行风险）
-      pushUndo(patchCodePillStyles(opts.mode === 'screen'));
-      // mermaid FO 内部元素计算样式内联（svg-as-img 环境不加载站点 CSS）
-      pushUndo(inlineMermaidStyles());
-      pushUndo(rasterizeMermaid());
       var stats = {
         canvases: qsa('.post-content canvas.channel-canvas').length,
         foInlined: qsa('.mermaid svg foreignObject').length, // 已 display:none 的 svg 也计入（近似）
@@ -617,41 +643,53 @@
       }
       s = Math.max(0.25, Math.floor(s * 100) / 100);
 
-      // ---- 4. html2canvas ----
-      // 正文/整页：回到页首再渲染（html2canvas 的元素取景与窗口滚动位置耦合，
-      // 中途滚动位置会导致画面起点错位/内容缺失）；屏幕模式保持用户视口
+      // ---- 4. html2canvas / 原生 ----
+      // 正文/整页：回到页首再渲染（取景与窗口滚动位置耦合）；
+      // 屏幕模式保持用户视口
       if (mode !== 'screen') {
         window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
       }
-      setStatus('正在渲染 ' + Math.round(w0 * s) + '×' + Math.round(h0 * s) + ' px…', false);
+      setStatus((nativeEngine ? '原生引擎渲染中' : '正在渲染 ') + Math.round(w0 * s) + '×' + Math.round(h0 * s) + ' px…', false);
 
-      function ignoreFn(el) {
-        if (!el || el.nodeType !== 1) return false;
-        if (ignored.indexOf(el) >= 0) return true;
-        if (el.tagName === 'IMG') {
-          var src = el.getAttribute('src') || '';
-          if (/\.(dds|exr)$/i.test(src) && el.style.display === 'none') return true;
+      function fastCapture() {
+        var ignoreFn = function (el) {
+          if (!el || el.nodeType !== 1) return false;
+          if (ignored.indexOf(el) >= 0) return true;
+          if (el.tagName === 'IMG') {
+            var src = el.getAttribute('src') || '';
+            if (/\.(dds|exr)$/i.test(src) && el.style.display === 'none') return true;
+          }
+          return false;
+        };
+        var h2cOpts = {
+          scale: s,
+          backgroundColor: pageBg(),
+          logging: false,
+          useCORS: true,
+          ignoreElements: ignoreFn
+        };
+        if (mode === 'screen') {
+          h2cOpts.width = w0;
+          h2cOpts.height = h0;
+          h2cOpts.windowWidth = w0;
+          h2cOpts.windowHeight = h0;
+          h2cOpts.scrollX = -originX;
+          h2cOpts.scrollY = -originY;
         }
-        return false;
+        return window.html2canvas(target, h2cOpts);
+      }
+      function nativeCapture() {
+        if (!window.modernScreenshot) {
+          return Promise.reject(new Error('原生渲染引擎未加载（modern-screenshot 资源缺失）'));
+        }
+        return window.modernScreenshot.domToCanvas(target, {
+          scale: s,
+          backgroundColor: pageBg()
+        });
       }
 
-      var h2cOpts = {
-        scale: s,
-        backgroundColor: pageBg(),
-        logging: false,
-        useCORS: true,
-        ignoreElements: ignoreFn
-      };
-      if (mode === 'screen') {
-        h2cOpts.width = w0;
-        h2cOpts.height = h0;
-        h2cOpts.windowWidth = w0;
-        h2cOpts.windowHeight = h0;
-        h2cOpts.scrollX = -originX;
-        h2cOpts.scrollY = -originY;
-      }
-
-      return window.html2canvas(target, h2cOpts).then(function (canvas) {
+      var cap = nativeEngine ? nativeCapture() : fastCapture();
+      return cap.then(function (canvas) {
         return {
           canvas: canvas,
           w: canvas.width,
@@ -870,6 +908,7 @@
     o = o || {};
     return renderCore({
       mode: o.mode || 'content',
+      engine: o.engine === 'native' ? 'native' : 'fast',
       scale: o.scale == null ? 1 : Number(o.scale),
       format: o.format || 'webp',
       quality: o.quality == null ? 0.9 : Number(o.quality),

@@ -208,7 +208,8 @@
 {{- /* ── 渲染页面为图片（仅 dev 配置 + 文章页加载，按需）── */ -}}
 {{- if and site.Params.vscodeContentBase .File (eq .Kind "page") (ne .Type "stats") }}
 <script src="{{ "vendor/html2canvas.min.js" | relURL }}"></script>
-<script src="{{ "js/page-shot.js" | relURL }}?v=19"></script>
+<script src="{{ "vendor/modern-screenshot.min.js" | relURL }}"></script>
+<script src="{{ "js/page-shot.js" | relURL }}?v=20"></script>
 {{- end }}
 
 
