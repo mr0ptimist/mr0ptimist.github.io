@@ -94,8 +94,8 @@
           '<div class="ps-row">' +
             '<span class="ps-label">渲染范围</span>' +
             '<div class="ps-seg" id="ps-scope">' +
-              '<label><input type="radio" name="ps-scope" value="content" checked><span>整篇正文</span></label>' +
-              '<label><input type="radio" name="ps-scope" value="page"><span>整个页面</span></label>' +
+              '<label><input type="radio" name="ps-scope" value="content"><span>整篇正文</span></label>' +
+              '<label><input type="radio" name="ps-scope" value="page" checked><span>整个页面</span></label>' +
               '<label><input type="radio" name="ps-scope" value="screen"><span>当前屏幕</span></label>' +
             '</div>' +
             '<div class="ps-hint" id="ps-scope-hint"></div>' +
