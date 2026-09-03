@@ -61,7 +61,8 @@
 .ps-row { display: flex; flex-direction: column; gap: 6px; }
 .ps-label { font-size: 12px; opacity: 0.72; }
 
-/* 分段单选按钮 */
+/* 分段单选按钮（选中态用固定 accent 蓝：主题的 --primary 是正文墨色，
+   浅色近黑/深色近白，做选中背景会黑块或白底白字，不可用） */
 .ps-seg {
   display: inline-flex;
   border: 1px solid var(--border);
@@ -89,9 +90,10 @@
 .ps-seg label:last-child span { border-right: none; }
 .ps-seg span:hover { background: var(--tertiary); }
 .ps-seg input:checked + span {
-  background: var(--primary);
+  background: #3b82f6;
   color: #fff;
   font-weight: 600;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 
 .ps-hint {
@@ -113,7 +115,7 @@
 .ps-quality { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 130px; }
 .ps-quality input[type="range"] {
   flex: 1;
-  accent-color: var(--primary);
+  accent-color: #3b82f6;
 }
 .ps-quality-val, #ps-quality-val { font-size: 11px; opacity: 0.7; min-width: 22px; text-align: right; }
 
@@ -124,7 +126,7 @@
   cursor: pointer;
 }
 .ps-chk input[type="checkbox"] {
-  accent-color: var(--primary);
+  accent-color: #3b82f6;
   margin-top: 2px;
   flex: none;
 }
@@ -183,12 +185,13 @@
 .ps-btn:hover { background: var(--tertiary); }
 .ps-btn:active { transform: scale(0.96); }
 .ps-btn.primary {
-  background: var(--primary);
+  background: #3b82f6;
   color: #fff;
   border-color: transparent;
   font-weight: 600;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
 }
-.ps-btn.primary:hover { filter: brightness(1.08); background: var(--primary); }
+.ps-btn.primary:hover { filter: brightness(1.08); background: #3b82f6; }
 .ps-btn:disabled { opacity: 0.55; cursor: default; transform: none; }
 
 /* ============================================================
