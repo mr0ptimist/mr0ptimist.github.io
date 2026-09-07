@@ -807,6 +807,83 @@
       });
       btnRow.appendChild(browserBtn);
       btnRow.appendChild(localBtn);
+
+      // ── 保存当前帧为 TGA / PNG（导出原始解码帧，不烘焙染色/remap/翻转）──
+      var fbReset = null;
+      function saveFeedback(btn, msg) {
+        btn.textContent = msg;
+        btn.classList.add('copied');
+        if (fbReset) clearTimeout(fbReset);
+        fbReset = setTimeout(function() {
+          btn.textContent = btn.dataset.label;
+          btn.classList.remove('copied');
+          fbReset = null;
+        }, 1500);
+      }
+      function exportFrame(btn, format) {
+        if (!straight) { saveFeedback(btn, '失败'); return; }
+        // 源文件名（与 meta 浮层 fname 同源）
+        var srcName = decodeURIComponent(img.src.split('/').pop() || 'image');
+        var base = srcName.replace(/\.[^.]+$/, '');
+        // 当前帧非默认 mip/slice/depth 时加后缀（0 不加，与 meta 术语一致）
+        var suffix = '';
+        if (curMip > 0) suffix += '_Lv' + curMip;
+        if (curSlice > 0) suffix += '_F' + curSlice;
+        if (isVolume && dSlider && parseInt(dSlider.value, 10) > 0) suffix += '_D' + parseInt(dSlider.value, 10);
+        var fname = base + suffix + (format === 'tga' ? '.tga' : '.png');
+
+        // 原始帧副本 + alpha 判定：DDS 用 DXGI chMap，EXR 视为含 A，普通图实测像素
+        var px = new Uint8ClampedArray(straight);
+        var chm = null;
+        var ddsC = ddsCache.get(img.src);
+        if (ddsC && ddsC.dds && ddsC.dds.fmt) chm = chMapFromDxgi(ddsC.dds.fmt.dxgi);
+        var hasAlpha = isExr || (chm && chm.A);
+        if (!hasAlpha) {
+          for (var ai = 3; ai < px.length; ai += 4) {
+            if (px[ai] !== 255) { hasAlpha = true; break; }
+          }
+        }
+        var onResult = function(status) {
+          if (status === 'saved') saveFeedback(btn, '已保存');
+          else if (status === 'downloaded') saveFeedback(btn, '已下载');
+          else if (status === 'failed') saveFeedback(btn, '失败');
+          // 'cancelled' 静默
+        };
+        if (format === 'tga') {
+          var bpp = hasAlpha ? 32 : 24;
+          var tga = ExportTexture.encodeTGA(px, curW, curH, bpp);
+          var blob = new Blob([tga], { type: 'image/x-tga' });
+          ExportTexture.saveBlob(blob, fname, { 'image/x-tga': ['.tga'] }, onResult);
+        } else {
+          var cv = document.createElement('canvas');
+          cv.width = curW; cv.height = curH;
+          cv.getContext('2d').putImageData(new ImageData(px, curW, curH), 0, 0);
+          cv.toBlob(function(b) {
+            if (b) ExportTexture.saveBlob(b, fname, { 'image/png': ['.png'] }, onResult);
+            else saveFeedback(btn, '失败');
+          }, 'image/png');
+        }
+      }
+      var saveTgaBtn = document.createElement('button');
+      saveTgaBtn.className = 'channel-meta-copy';
+      saveTgaBtn.textContent = '保存TGA';
+      saveTgaBtn.dataset.label = '保存TGA';
+      saveTgaBtn.title = '保存 TGA 到桌面（另存为对话框）';
+      saveTgaBtn.addEventListener('click', function(e) {
+        e.stopPropagation(); e.preventDefault();
+        exportFrame(saveTgaBtn, 'tga');
+      });
+      var savePngBtn = document.createElement('button');
+      savePngBtn.className = 'channel-meta-copy';
+      savePngBtn.textContent = '保存PNG';
+      savePngBtn.dataset.label = '保存PNG';
+      savePngBtn.title = '保存 PNG 到桌面（另存为对话框）';
+      savePngBtn.addEventListener('click', function(e) {
+        e.stopPropagation(); e.preventDefault();
+        exportFrame(savePngBtn, 'png');
+      });
+      btnRow.appendChild(saveTgaBtn);
+      btnRow.appendChild(savePngBtn);
       meta.appendChild(btnRow);
       wrapper.appendChild(meta);
     }).catch(function(){});
