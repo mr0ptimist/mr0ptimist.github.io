@@ -1,0 +1,22 @@
+{
+  "rdc_files": [],
+  "code_refs": [
+    {
+      "path": "D:/Projects/GitProjects/Renderdoc_Crack/renderdoc/driver/vulkan/vk_counters.cpp",
+      "note": "Vulkan EventGPUDuration 实现：PreDraw/PostDraw 逐 draw 打时间戳（vkCmdWriteTimestamp + TOP_OF_PIPE/BOTTOM_OF_PIPE，槽位 m_Results.size()*2 + 0/1），结果 = delta × limits.timestampPeriod / 1e9。上游 #2659 明确不做 per-pass 改造"
+    },
+    {
+      "path": "D:/Projects/GitProjects/Renderdoc_Crack/renderdoc/driver/vulkan/vk_debug.cpp",
+      "note": "VulkanReplay::InitCounters：厂商硬件计数器仅初始化 AMD/Samsung（AMDCounters/GPA）与 NVIDIA（NVVulkanCounters，且 DISABLED(RDOC_ANDROID)），其余厂商走 RDCLOG(\"%s GPU detected - no counters available\")——Qualcomm 落此分支"
+    },
+    {
+      "path": "D:/Projects/GitProjects/Renderdoc_Crack/renderdoc/driver/gl/gl_counters.cpp",
+      "note": "GLES 侧 EventGPUDuration：仅当 HasExt[ARB_timer_query] 才入列，实际走 eGL_TIME_ELAPSED（GL_EXT_disjoint_timer_query），不依赖厂商 SDK"
+    },
+    {
+      "path": "%TEMP%/ts_test/",
+      "note": "本文实测探针源码：ts_probe.c（四种打点模式对照）、ts_probe2.c（9 种 stage × 递减工作量矩阵）、ts_probe3.c（pass 边界 vs pass 内对照）、ts_probe4.c（真 draw + 片元循环控制工作量）、ts_probe5.c（几何着色器触发 direct 模式）；full.vert/heavy.frag/pass.geom 为配套 shader；remote_counters.py 走 RenderDoc 远端回放取 GPU Duration 与 pipeline statistics"
+    }
+  ],
+  "notes": "核心实测数字（Adreno 830 / 驱动 512.800 / Android 16）：timestampPeriod=52.0833ns、timestampValidBits=48、timestampComputeAndGraphics=1；pass 内任何 stage 打点恒为 1.198us（=23 ticks，工作量差 64 倍不变）；pass 边界打点准确且线性（clear 对半：858.18/430.83/219.69/113.80 us；真 draw 4 倍步进：1039.17/4050.00/16069.27/63946.51 us，比例 3.90/3.97/3.98×）；真机抓帧 41 个 draw 的 GPU Duration 仅 3 个不同取值，同批 draw 的 PS Invocations/Samples Passed 分别有 22/26 个不同取值。SDP 侧对照证据：ToolsPlay/SdpWorkbench/_generate/workspace/ana/*/snapshot_2/metrics.json（164 DC，clocks 仅 5 个不同取值，124 个共享同值）。PRIVATE.md 约束：正文不出现任何内部项目代号。"
+}

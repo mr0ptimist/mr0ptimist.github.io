@@ -1,0 +1,50 @@
+{
+  "rdc_files": [],
+  "code_refs": [
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/QualcommProfiler/PKR110_QualcommProfiler_Plan.md",
+      "note": "PKR110 消费机激活新版 Qualcomm Profiler qprof server 的计划与实测（shm 垫片/overlay/FTP/kgsl 计数器）"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/QualcommProfiler/",
+      "note": "qprof_start.sh / qprof_restore.bat / ftp_restore.bat 一键重拉脚本"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_PY/SDPCLI/_doc/architecture.md",
+      "note": "SDPCLI(第三方) ↔ 手机 SDP service 通信架构全图"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_PY/SDPCLI/_doc/bugs.md",
+      "note": "SDPCLI v0.1.4 三个 bug 的记录与修复（AUTO cb 选错 / Qonvert 堆损坏 / GtkSharp 缺失）"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_PY/SDPCLI/_doc/rev-notes.md",
+      "note": "逆向工具链笔记（ilspycmd/SWIG 锚点/崩溃转储）"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_PY/pysdp/README_CN.md",
+      "note": "pysdp 分析平台说明（管线/WebUI/AI Chat/MCP/GLES 反编译）"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_QC/README.md",
+      "note": "sdpcli 2026.6 Vulkan trace 层崩溃调查总索引（双轨触发模型）"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_QC/_doc/crash-analysis.md",
+      "note": "行级反汇编定位（CollectOneCmdMonitor → 驱动 memmove UAF）"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_QC/_doc/device-notes.md",
+      "note": "真机实测主记录 + 22 次崩溃普查全表附录"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_QC/_doc/qdn-post-final.md",
+      "note": "QDN 论坛发布件（2026-09-02 已投递，权威版）"
+    },
+    {
+      "path": "D:/ClaudeProjects/ToolsPlay/SdpCliExplorer/",
+      "note": "官方 sdpcli 封装 GUI 探索器（指标采样/trace 双模式）"
+    }
+  ],
+  "notes": "调研源头 = 官方 Snapdragon Profiler(SDP) 体验差：主要痛点是流程迭代慢（连设备→启动→截帧→导出→人工分析，往返周期长）与截帧经常崩溃/录空。最终定案（2026-09-03 简述 md：D:/ClaudeProjects/AndroidProfile/简述_GPU分析工具调研_优劣与方向.md）：主线 A 线 = 官方 DLL（从官方安装目录 C:/Program Files/Qualcomm/Snapdragon Profiler 解析 SDPClientFramework/SDPCoreWrapper/SDPCore.dll）+ 自编壳 + 自建前端（未来），手机侧全官方零改动；经典 PROFILER_Trace 层链路 trace 稳定。qprof（Qualcomm Profiler）消费机激活跑通但 GPU 指标受限→弃（记录激活路径）。B 线官方设备侧 sdpcli：r l/r c realtime 保留（127 项指标）；Vulkan trace 2026.6 注入层 22 次同栈崩溃（UAF，双轨触发模型）→弃，已投 QDN。pysdp 是 A 线调研期实验平台：LLM 分析非需求、WebUI 形态未沿用，DuckDB 数据层思路可吸收。自编壳当前 = 修复版 v0.1.4（可行性已验证），编排改造是未来工作。正文按公开级对内部应用包名做了脱敏，一律以'Unity 内部测试工程'代替。"
+}

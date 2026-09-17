@@ -1,0 +1,21 @@
+{
+  "code_refs": [
+    {
+      "path": "D:/Projects/UnityProjects/OfficialV21/Assets/Tasks/Editor/ApkAssetAnalyzer/ApkAssetAnalyzerWindow.cs",
+      "note": "APK 分析器完整实现：UnityArchiveParser（UnityFS 容器）+ SerializedFileParser + TextureInfo/MaterialInfo（无 TypeTree 硬解析）"
+    },
+    {
+      "path": "D:/Projects/UnityProjects/OfficialV21/Assets/Tasks/Editor/ApkAssetAnalyzer/README.md",
+      "note": "工具 README：参考来源（AssetStudio/UnityDataTools 拉取方式）与开发验证约定"
+    },
+    {
+      "path": "D:/Projects/UnityProjects/OfficialV21/Build/apk_report_zs.txt",
+      "note": "折射优化.apk（60MB 压缩构建）完整分析报告：109 贴图/13 材质/APK 构成/类型分布"
+    },
+    {
+      "path": "D:/Projects/UnityProjects/OfficialV21/ProjectSettings/ProjectSettings.asset",
+      "note": "m_ShowUnitySplashScreen 已改为 0（关 splash 省 UnitySplash-cube 2.7MB 案例）"
+    }
+  ],
+  "notes": "Unity 2021.3.45f1 Android。所有格式结论为实测逆向，参考 AssetStudio（github.com/Razviar/assetstudio）与 UnityDataTools（github.com/Unity-Technologies/UnityDataTools）。验证样本：折射优化.apk（压缩 data.unity3d）+ analysis4.apk（未压缩 split）。关键实测点：大端 header+小端 metadata；Texture2D 2021.3 有 m_CompleteImageSize/PlatformBlob/StreamingInfo(offset 为 Int64)；材质跨文件引用 fileID=externals 索引+1。"
+}
