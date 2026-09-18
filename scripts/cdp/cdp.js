@@ -49,6 +49,7 @@ async function openPage(url, opts) {
     ws.onmessage = ev => {
       const m = JSON.parse(ev.data);
       if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
+      else if (m.method && opts.onEvent) opts.onEvent(m.method, m.params);   // 事件订阅（如 Debugger.paused）
     };
     const send = (method, params = {}) => new Promise(res => { const i = ++id; pending.set(i, res); ws.send(JSON.stringify({ id: i, method, params })); });
     const evaluate = async expr => {
@@ -57,15 +58,19 @@ async function openPage(url, opts) {
       return r.result.result.value;
     };
 
+    // 等页面就绪：默认等树形视图（列表页用）；传 waitSelector:false 可跳过（诊断类工具用）
+    const waitSel = opts.waitSelector === undefined ? '.ptree-article' : opts.waitSelector;
     const waitTree = async () => {
+      if (!waitSel) return;
       for (let i = 0; i < 80; i++) {
-        try { if (await evaluate(`document.querySelectorAll('.ptree-article').length`) > 0) return; } catch (e) { }
+        try { if (await evaluate(`document.querySelectorAll(${JSON.stringify(waitSel)}).length`) > 0) return; } catch (e) { }
         await sleep(250);
       }
-      throw new Error('树形视图未渲染');
+      throw new Error('未等到选择器：' + waitSel);
     };
 
     await send('Page.enable'); await send('Runtime.enable');
+    if (opts.setup) await opts.setup(send);                                 // 导航前的准备（如开 Debugger 域）
     for (const src of [].concat(opts.initScript || []))
       await send('Page.addScriptToEvaluateOnNewDocument', { source: src });   // 每次导航都会注入
     await send('Page.navigate', { url });
@@ -74,6 +79,7 @@ async function openPage(url, opts) {
 
     return {
       evaluate,
+      send,
       waitTree,
       async close() { try { ws.close(); } catch (e) { } chrome.kill(); }
     };

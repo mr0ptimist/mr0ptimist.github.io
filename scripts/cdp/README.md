@@ -33,6 +33,19 @@ node scripts/cdp/thumb_check.js http://127.0.0.1:8899/local/ 16
 
 `/posts/` 同理（把 URL 和期望值的路径换掉即可）。三个脚本失败时退出码均为 1。
 
+## 诊断（非断言）
+
+页面"没反应但控制台无输出"时用追踪器：
+
+```bash
+node scripts/cdp/trace_exceptions.js http://127.0.0.1:8899/local/ 12
+```
+
+暂停在**所有**异常上（含被 `try/catch` 或 `.catch(){}` 吞掉的——这是控制台看不见的那些），
+打印描述与调用栈，按「描述 + 前 3 帧」去重计数，并区分 `[已捕获]` / `[未捕获]`。
+2026-09 的缩略图静默失败就是这样一行定位到 `image-viewer.js:170`（`DXGI_CHANNELS` 为
+undefined）的。任何页面都能跑（`waitSelector: false`，不等树形视图）。
+
 ## 这些断言挡住的真实事故
 
 - **分组塌陷**（2026-09 修）：`sort-bar.js` 用递归 `querySelectorAll('.ptree-article')` 抓全树
