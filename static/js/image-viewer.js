@@ -25,32 +25,92 @@
   var c = document.querySelector('.post-content');
   var listThumbs = document.querySelectorAll('.entry-thumb img');
 
+  // 列表页缩略图：解码后缩到显示尺寸（≤200px），小图存入 Cache Storage
+  // 缓存键 = 图片 URL，值 = 小图 blob（几 KB~几十 KB）。刷新时命中直接画，跳过下载与解码。
+  // 想强制失效旧缓存（如重新导出了同名 DDS）时，升 THUMB_CACHE 版本号。
+  var THUMB_CACHE = 'blog-thumb-v1';
+  var thumbCachePromise = null;
+  function thumbCache() {
+    if (typeof caches === 'undefined') return Promise.resolve(null);
+    if (!thumbCachePromise) thumbCachePromise = caches.open(THUMB_CACHE).catch(function () { return null; });
+    return thumbCachePromise;
+  }
+  function cacheThumb(url, cv) {
+    if (!cv.toBlob) return;
+    cv.toBlob(function (blob) {
+      if (!blob) return;
+      thumbCache().then(function (c) { if (c) c.put(url, new Response(blob)).catch(function () { }); });
+    }, 'image/webp', 0.9);
+  }
+
   // Simple thumbnail render — just a canvas, no channel UI
+  // 大图先全尺寸中转再缩放：画布只保留显示尺寸（原实现保留全尺寸画布，11352² 一张就 515MB 常驻）
   function renderThumb(img, w, h, pixels) {
     // Strip alpha: force RGB view
     for (var i = 3; i < pixels.length; i += 4) pixels[i] = 255;
-    var maxDim = Math.max(w, h);
-    var cap = 200;
-    var dw = w, dh = h;
-    if (maxDim > cap) { var s = cap / maxDim; dw = Math.round(w * s); dh = Math.round(h * s); }
+    var cap = 200, maxDim = Math.max(w, h);
     var cv = document.createElement('canvas');
-    cv.className = 'thumb-canvas'; cv.width = w; cv.height = h;
-    cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(pixels), w, h), 0, 0);
-    cv.style.width = dw + 'px'; cv.style.height = dh + 'px';
+    cv.className = 'thumb-canvas';
+    if (maxDim > cap) {
+      var s = cap / maxDim, dw = Math.round(w * s), dh = Math.round(h * s);
+      var big = document.createElement('canvas');   // 全尺寸中转，缩放后立刻释放
+      big.width = w; big.height = h;
+      big.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(pixels), w, h), 0, 0);
+      cv.width = dw; cv.height = dh;
+      cv.getContext('2d').drawImage(big, 0, 0, dw, dh);
+      big.width = big.height = 0;
+    } else {
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(pixels), w, h), 0, 0);
+    }
+    cv.style.width = cv.width + 'px';
+    cv.style.height = cv.height + 'px';
     cv.style.borderRadius = '4px';
     img.parentNode.insertBefore(cv, img);
     img.style.display = 'none';
     return cv;
   }
 
+  // 把竖直翻转烘进像素（原为 CSS scaleY(-1)；缓存条目不带 CSS 变换，两者必须一致）
+  function bakeFlip(cv) {
+    var tmp = document.createElement('canvas');
+    tmp.width = cv.width; tmp.height = cv.height;
+    tmp.getContext('2d').drawImage(cv, 0, 0);
+    var ctx = cv.getContext('2d');
+    ctx.save(); ctx.scale(1, -1); ctx.drawImage(tmp, 0, -cv.height); ctx.restore();
+    tmp.width = tmp.height = 0;
+  }
+
+  // 缓存命中：blob → Image → 画布，不发起任何解码相关请求
+  function drawCachedThumb(img, blob) {
+    var objUrl = URL.createObjectURL(blob);
+    var im = new Image();
+    im.onload = function () {
+      var cv = document.createElement('canvas');
+      cv.className = 'thumb-canvas';
+      cv.width = im.naturalWidth; cv.height = im.naturalHeight;
+      cv.getContext('2d').drawImage(im, 0, 0);
+      cv.style.width = cv.width + 'px';
+      cv.style.height = cv.height + 'px';
+      cv.style.borderRadius = '4px';
+      img.parentNode.insertBefore(cv, img);
+      img.style.display = 'none';
+      URL.revokeObjectURL(objUrl);
+    };
+    im.onerror = function () { URL.revokeObjectURL(objUrl); };
+    im.src = objUrl;
+  }
+
   // Process list-page thumbnails (lightweight, no channel UI)
   listThumbs.forEach(function(img) {
+    if (!/\.(dds|exr)(\?|$)/i.test(img.src)) return;   // 普通图片浏览器原生显示，不走解码/缓存路径
     var jsonUrl = img.src.replace(/\.[^.]+$/, '.json');
     var flipY = false;
     var done = false;
 
     function doThumb(pixels, w, h) {
       if (done) return; done = true;
+      var cv;
       if (flipY) {
         // Flip vertically in-place
         var row = new Uint8ClampedArray(w * 4);
@@ -60,46 +120,60 @@
           new Uint8ClampedArray(pixels.buffer, top, w * 4).set(new Uint8ClampedArray(pixels.buffer, bot, w * 4));
           new Uint8ClampedArray(pixels.buffer, bot, w * 4).set(row);
         }
-        var cv = renderThumb(img, w, h, pixels);
-        cv.style.transform = 'scaleY(-1)';
+        cv = renderThumb(img, w, h, pixels);
+        bakeFlip(cv);
       } else {
-        renderThumb(img, w, h, pixels);
+        cv = renderThumb(img, w, h, pixels);
+      }
+      cacheThumb(img.src, cv);
+    }
+
+    function decodeThumb() {
+      // Check JSON sidecar for flip_y
+      fetch(jsonUrl).then(function(r) { if (r.ok) return r.json(); }).then(function(d) {
+        if (d && d.flip_y) flipY = true;
+      }).catch(function(){});
+
+      if (/\.dds$/i.test(img.src)) {
+        fetch(img.src).then(function(r) { if (!r.ok) return; return r.arrayBuffer(); }).then(function(buf) {
+          if (!buf) return;
+          var dds = DDS.parse(buf);
+          if (!dds) { console.warn('[thumb] DDS.parse 失败: ' + img.src.split('/').pop()); return; }
+          var mip0 = dds.getMip(0);
+          if (!mip0) { console.warn('[thumb] getMip(0) 为空: ' + img.src.split('/').pop()); return; }
+          // 单通道缩略图同样按 R 通道着色（与文章内查看器一致）
+          var chm = chMapFromDxgi(dds.fmt.dxgi);
+          if (chm.R && !chm.G && !chm.B) {
+            for (var gi = 1; gi < mip0.length; gi += 4) { mip0[gi] = 0; mip0[gi+1] = 0; }
+          }
+          // Wait a tick for JSON to arrive
+          setTimeout(function(){ doThumb(mip0, dds.w, dds.h); }, 50);
+        }).catch(function(e){ console.warn('[thumb] DDS 缩略图异常: ' + img.src.split('/').pop() + ' — ' + e); });
+      } else if (/\.exr$/i.test(img.src)) {
+        fetch(img.src).then(function(r) { if (!r.ok) return; return r.arrayBuffer(); }).then(function(buf) {
+          if (!buf) return;
+          var exr = EXR.parse(buf);
+          if (!exr) return;
+          var rgba8 = EXR.toRGBA8(exr);
+          if (!rgba8) return;
+          setTimeout(function(){ doThumb(rgba8, exr.w, exr.h); }, 50);
+        }).catch(function(e){ console.warn('[thumb] EXR 缩略图异常: ' + img.src.split('/').pop() + ' — ' + e); });
       }
     }
 
-    // Check JSON sidecar for flip_y
-    fetch(jsonUrl).then(function(r) { if (r.ok) return r.json(); }).then(function(d) {
-      if (d && d.flip_y) flipY = true;
-    }).catch(function(){});
-
-    if (/\.dds$/i.test(img.src)) {
-      fetch(img.src).then(function(r) { if (!r.ok) return; return r.arrayBuffer(); }).then(function(buf) {
-        if (!buf) return;
-        var dds = DDS.parse(buf);
-        if (!dds) return;
-        var mip0 = dds.getMip(0);
-        if (!mip0) return;
-        // 单通道缩略图同样按 R 通道着色（与文章内查看器一致）
-        var chm = chMapFromDxgi(dds.fmt.dxgi);
-        if (chm.R && !chm.G && !chm.B) {
-          for (var gi = 1; gi < mip0.length; gi += 4) { mip0[gi] = 0; mip0[gi+1] = 0; }
-        }
-        // Wait a tick for JSON to arrive
-        setTimeout(function(){ doThumb(mip0, dds.w, dds.h); }, 50);
-      }).catch(function(){});
-    } else if (/\.exr$/i.test(img.src)) {
-      fetch(img.src).then(function(r) { if (!r.ok) return; return r.arrayBuffer(); }).then(function(buf) {
-        if (!buf) return;
-        var exr = EXR.parse(buf);
-        if (!exr) return;
-        var rgba8 = EXR.toRGBA8(exr);
-        if (!rgba8) return;
-        setTimeout(function(){ doThumb(rgba8, exr.w, exr.h); }, 50);
-      }).catch(function(){});
-    }
+    // 先查缓存：命中直接画（不下载、不解码）；未命中才走解码路径
+    thumbCache().then(function (c) {
+      if (!c) { decodeThumb(); return; }
+      c.match(img.src).then(function (res) {
+        if (!res) { decodeThumb(); return; }
+        res.blob().then(function (blob) {
+          if (done) return;
+          done = true;
+          drawCachedThumb(img, blob);
+        });
+      }).catch(function () { decodeThumb(); });
+    }).catch(function () { decodeThumb(); });
   });
-
-  if (!c) return;
 
   // ---- Worker pool (off-main-thread DDS/EXR decode) ----
   var decodeWorker = (function(){
@@ -170,6 +244,10 @@
     var ch = DXGI_CHANNELS[dxgi] || '';
     return {R:ch.indexOf('R')>=0, G:ch.indexOf('G')>=0, B:ch.indexOf('B')>=0, A:ch.indexOf('A')>=0};
   }
+
+  // 列表页没有 .post-content：提前 return 保护 worker 池/查看器，但它必须排在缩略图路径用到的
+  // 符号之后——缩略图回调是异步的，return 排在 DXGI_CHANNELS 之前曾让所有 DDS 缩略图静默失败
+  if (!c) return;
 
   // ---- Process single image ----
   function processImage(img, w, h, ddsPixels) {

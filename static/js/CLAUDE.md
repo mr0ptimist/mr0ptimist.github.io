@@ -69,4 +69,20 @@ html2canvas 版本记录在 `static/vendor/CLAUDE.md`；升级后需重跑 CDP �
 `list.html` 与 `section/local.html` 加载 `js/sort-bar.js?v=N`（两处都要改）。
 **修改 `sort-bar.js` 后必须把两个模板里的 `?v=N` 同时加 1**（现为 1）。
 
-排序只动 `<ul class="ptree-list">` 的**直接子项** `li.ptree-article`——曾用 `querySelectorAll('.ptree-article')`（递归）再整体 `insertBefore`，把全树文章搬进同一个 `<ul>`（分组全塌进一个文件夹）。改这块必须跑 CDP 回归：对比服务端渲染的每个列表与 JS 执行后的文章集合是否一致。
+排序只动 `<ul class="ptree-list">` 的**直接子项** `li.ptree-article`——曾用 `querySelectorAll('.ptree-article')`（递归）再整体 `insertBefore`，把全树文章搬进同一个 `<ul>`（分组全塌进一个文件夹）。改这块必须跑 CDP 回归：对比服务端渲染的每个列表与 JS 执行后的文章集合是否一致（工具：`scripts/cdp/`，用法见该目录 README）。
+
+## ⚠️ image-viewer.js 列表页提前 return
+
+`var c = document.querySelector('.post-content'); if (!c) return;`——列表页（`/local/`、`/posts/`）没有 `.post-content`，IIFE 会在这个 return 处提前退出（worker 池/查看器不该在列表页跑，这个保护本身是对的）。
+
+**但它必须放在缩略图路径用到的符号之后**：缩略图块（`listThumbs.forEach`）在 return 之前就派发了异步 fetch，回调在 return 之后才执行——曾因 `DXGI_CHANNELS` / `chMapFromDxgi` 定义在 return 之后（`var` 只提升声明、不提升赋值），所有 DDS/EXR 缩略图静默失败（异常被 `.catch(function(){})` 吞掉，页面上只看到碎图）。新增列表页要用的工具函数时，放这个 return 上面。
+
+## ⚠️ 缩略图缓存（image-viewer.js）
+
+列表页的 DDS/EXR 缩略图解码后缩到 ≤200px，存进 Cache Storage **`blog-thumb-v1`**（键 = 图片 URL，值 = WebP 小图 blob）。
+刷新时命中缓存 → **不下载、不解码**（16 张 33MB DDS 的 `/local/` 从 ~11s 降到即时）。
+
+- **重新导出同名 DDS 后旧缩略图不会自动失效**：升 `image-viewer.js` 顶部的 `THUMB_CACHE` 版本号即可让旧缓存全部作废。
+- 竖直翻转走 `bakeFlip()` 烘进像素，**不要改回 CSS `scaleY(-1)`**——缓存条目不带 CSS 变换，两条路径画面会不一致。
+- 缓存条目本身也要求画布是显示尺寸（大图先全尺寸中转再 `drawImage` 缩放）：全分辨率画布曾让 `/local/` 常驻 1.2GB 内存。
+- 回归：`node scripts/cdp/thumb_check.js <URL> <DDS/EXR缩略图数>`（冷启动写缓存 → 刷新 0 请求 + 画面一致）。
