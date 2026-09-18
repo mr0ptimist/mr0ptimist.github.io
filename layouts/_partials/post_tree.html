@@ -21,8 +21,10 @@
     {{- end -}}
   {{- end -}}
 {{- else -}}
-  {{- /* Root section (posts/) — .File may be nil; use path prefix approach */ -}}
-  {{- $prefix := "posts/" -}}
+  {{- /* Section without _index.md — .File is nil; derive the prefix from its own URL.
+         (Hardcoding "posts/" dropped every local/ Page Bundle from the tree: the
+         leftover rel path still contained "/" and was mistaken for a sub-section.) */ -}}
+  {{- $prefix := strings.TrimPrefix "/" $section.RelPermalink -}}
   {{- range $section.RegularPages -}}
     {{- $norm := replace .File.Dir "\\" "/" -}}
     {{- $rel := strings.TrimPrefix $prefix $norm -}}

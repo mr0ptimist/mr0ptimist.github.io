@@ -63,3 +63,10 @@
 `layouts/_partials/header.html` 加载 `js/page-shot.js?v=N`（仅 dev + 文章页，html2canvas 紧随其后）。
 **修改 `page-shot.js` 后必须把 header.html 里的 `?v=N` 加 1**（现为 22）。
 html2canvas 版本记录在 `static/vendor/CLAUDE.md`；升级后需重跑 CDP 实测（参考文件头注释里的兼容性策略）。
+
+## ⚠️ sort-bar.js 缓存纪律
+
+`list.html` 与 `section/local.html` 加载 `js/sort-bar.js?v=N`（两处都要改）。
+**修改 `sort-bar.js` 后必须把两个模板里的 `?v=N` 同时加 1**（现为 1）。
+
+排序只动 `<ul class="ptree-list">` 的**直接子项** `li.ptree-article`——曾用 `querySelectorAll('.ptree-article')`（递归）再整体 `insertBefore`，把全树文章搬进同一个 `<ul>`（分组全塌进一个文件夹）。改这块必须跑 CDP 回归：对比服务端渲染的每个列表与 JS 执行后的文章集合是否一致。

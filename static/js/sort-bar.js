@@ -60,42 +60,40 @@
   }
 
   /* ── Tree mode sort ── */
-  function getTreeArticles(folderEl) {
-    var root = folderEl || treeWrap;
-    return Array.from(root.querySelectorAll('.ptree-article'));
+  function treeCompare(a, b, mode) {
+    var linkA = a.querySelector('.ptree-link');
+    var linkB = b.querySelector('.ptree-link');
+    if (mode === 'name') {
+      var titleA = linkA ? linkA.querySelector('.ptree-title') : null;
+      var titleB = linkB ? linkB.querySelector('.ptree-title') : null;
+      return (titleA ? titleA.textContent : '').localeCompare(titleB ? titleB.textContent : '');
+    }
+    /* date / lastmod: the tree renders only the publish date */
+    var dateA = linkA ? linkA.querySelector('.ptree-date') : null;
+    var dateB = linkB ? linkB.querySelector('.ptree-date') : null;
+    return (dateA ? dateA.textContent : '').localeCompare(dateB ? dateB.textContent : '');
   }
 
-  function sortTreeArticles(container, mode, dir) {
-    var articles = getTreeArticles(container);
+  /* Sort ONE ptree-list in place. ONLY its direct <li.ptree-article> children are
+     moved — folder <li>s and the articles inside them stay untouched, so each
+     folder keeps exactly its own articles. (Re-appending puts articles after the
+     folder <li>s, matching the server-rendered order.) */
+  function sortTreeList(list, mode, dir) {
+    var articles = [];
+    for (var i = 0; i < list.children.length; i++) {
+      if (list.children[i].classList.contains('ptree-article')) articles.push(list.children[i]);
+    }
+    if (articles.length < 2) return;
     articles.sort(function (a, b) {
-      var linkA = a.querySelector('.ptree-link');
-      var linkB = b.querySelector('.ptree-link');
-      var titleA = (linkA ? linkA.querySelector('.ptree-title') : null);
-      var titleB = (linkB ? linkB.querySelector('.ptree-title') : null);
-      var dateA = (linkA ? linkA.querySelector('.ptree-date') : null);
-      var dateB = (linkB ? linkB.querySelector('.ptree-date') : null);
-      var cmp;
-      if (mode === 'name')
-        cmp = (titleA ? titleA.textContent : '').localeCompare(titleB ? titleB.textContent : '');
-      else if (mode === 'lastmod')
-        cmp = (dateA ? dateA.textContent : '').localeCompare(dateB ? dateB.textContent : '');
-      else cmp = (dateA ? dateA.textContent : '').localeCompare(dateB ? dateB.textContent : '');
+      var cmp = treeCompare(a, b, mode);
       return dir === 'asc' ? cmp : -cmp;
     });
-    if (!articles.length) return;
-    var list = articles[0].parentNode;
-    var ref = null;
-    for (var i = 0; i < list.children.length; i++) {
-      if (!list.children[i].classList.contains('ptree-article')) {
-        if (articles.indexOf(list.children[i]) === -1) { ref = list.children[i]; break; }
-      }
-    }
-    articles.forEach(function (el) { list.insertBefore(el, ref); });
+    articles.forEach(function (el) { list.appendChild(el); });
   }
 
   function sortAllTrees(mode, dir) {
     var lists = treeWrap.querySelectorAll('.ptree-list');
-    for (var i = 0; i < lists.length; i++) sortTreeArticles(lists[i], mode, dir);
+    for (var i = 0; i < lists.length; i++) sortTreeList(lists[i], mode, dir);
   }
 
   /* ── Init ── */
