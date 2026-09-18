@@ -67,3 +67,5 @@ Hugo 版本：0.160.1 extended。
 - 像素裁决：Read 截图有 vision 误读风险，PIL 采样同点像素 open/closed 对照
 - `mmdc` 干净环境渲染做尺寸基准，定位环境因素
 - SVG 无 `.click()`，用 `dispatchEvent(new MouseEvent('click',{bubbles:true}))`
+- 静默失败排查：CDP `Debugger.setPauseOnExceptions('all')` 暂停在**被 catch 吞掉**的异常上，直接拿到抛错行号（`.catch(function(){})` 类问题的唯一可靠手段）
+- 可复用回归脚本：`scripts/cdp/`（树列表分组守恒/排序，静态期望值 vs headless Chrome 实际 DOM，用法见该目录 README）
