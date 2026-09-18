@@ -3,7 +3,7 @@
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $config = Get-Content (Join-Path $scriptDir "prompts.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 
-# $url looks like: cc:D:/Projects/.../GithubIO
+# $url looks like: cc:<项目根>
 $path = $url -replace '^cc:', ''
 $path = [System.Uri]::UnescapeDataString($path)
 $path = $path -replace '/', '\' -replace '\\$', ''

@@ -1,6 +1,6 @@
 param([string]$url)
 
-# $url looks like: winfs:D:/Projects/.../index.md
+# $url looks like: winfs:<绝对路径>
 $path = $url -replace '^winfs:', ''
 # Browser encodes non-ASCII, so decode
 $path = [System.Uri]::UnescapeDataString($path)

@@ -72,7 +72,7 @@ content/posts/{文章名}/
 - 图片使用 Page Bundle：文章含图片时，md 和图片放在 `content/posts/{文章名}/`（md 命名为 `index.md`），用相对路径引用
 - VSCode 粘贴图片后运行 `organize_post_images.py` 自动压缩整理（PNG→WebP，>1920px 缩放），原图保留为 `.bak` 手动确认后删除
 - 中文与英文/数字之间加空格
-- **处理文章前，若 `D:\Projects\OtherProjects\GithubIO\content\PRIVATE.md` 存在，必须先读取。**
+- **处理文章前，若 `content/PRIVATE.md` 存在，必须先读取。**
 
 ## 研究类文章规范
 

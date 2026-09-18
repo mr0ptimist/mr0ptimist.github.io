@@ -6,8 +6,8 @@ $config = Get-Content (Join-Path $scriptDir "prompts.json") -Raw -Encoding UTF8 
 
 try {
     # $url looks like one of:
-    #   cca:D:/Projects/.../GithubIO/content/posts/文章名/index.md    (Page Bundle)
-    #   cca:D:/Projects/.../GithubIO/content/local/文件名.md           (single file)
+    #   cca:<项目根>/content/posts/文章名/index.md    (Page Bundle)
+    #   cca:<项目根>/content/local/文件名.md           (single file)
     $articlePath = $url -replace '^cca:', ''
     $articlePath = [System.Uri]::UnescapeDataString($articlePath)
     $articlePath = $articlePath -replace '/', '\' -replace '\\$', ''

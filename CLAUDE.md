@@ -37,6 +37,7 @@ Hugo 版本：0.160.1 extended。
 - **树形列表视图**：`layouts/_partials/post_tree.html` 递归 partial，基于 Hugo `.Sections` 渲染文件夹层级。`list.html`（`/posts/`）和 `section/local.html`（`/local/`）均已接入。需在分组文件夹中添加 `_index.md`（含 `title`）使其成为 Hugo section。样式：`assets/css/extended/post-tree.css`
 - **缩略图预览**：树形视图中自动提取每篇文章首张图片（DDS/EXR/PNG/JPG/WebP），DDS/EXR 由 `image-viewer.js` 转为 canvas 显示
 - **自定义头部**：`layouts/_partials/header.html`（主题切换、宽度控制、VS Code/资源管理器/Claude Code 快捷按钮）
+- **快捷按钮协议链**：按钮走 `winfs:`/`cc:`/`cca:` 自定义协议。注册表（`HKCU\Software\Classes\{winfs,cc,cca}`）只指向 `%LOCALAPPDATA%\GithubIO\protocols\protocol-relay.ps1`——由 `scripts/setup_winfs_protocol.ps1` 从 `scripts/protocol-relay.ps1` 拷贝安装，**注册表里不含任何项目路径**；中继脚本在点击时从 URL 载荷（由 `serve_启动预览.bat` 每次 serve 写入 `config/development/hugo.toml` 的 `vscodeContentBase` 生成）向上找 `hugo.toml` 定位项目根，再转发给 `scripts/` 下的对应脚本。项目搬家后无需重新注册协议——**勿把绝对路径写回注册表或脚本**
 - Hugo server 在 watch 模式下自动重载，无需手动重启
 
 ## 内容规则
