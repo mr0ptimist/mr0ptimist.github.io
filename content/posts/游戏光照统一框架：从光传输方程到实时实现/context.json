@@ -1,0 +1,22 @@
+{
+  "rdc_files": [],
+  "code_refs": [
+    {
+      "path": "C:/Program Files/Unity 6000.3.23f1/Editor/Data/Resources/PackageManager/BuiltInPackages/com.unity.render-pipelines.universal/ShaderLibrary",
+      "note": "Unity 6000.3.23f1 / URP 17.3.0 的 BRDF、实时光源、GI、环境反射、AO 与阴影 Shader 主目录"
+    },
+    {
+      "path": "C:/Program Files/Unity 6000.3.23f1/Editor/Data/Resources/PackageManager/BuiltInPackages/com.unity.render-pipelines.universal/Runtime",
+      "note": "URP 17.3.0 的 Forward、Deferred、SSAO、Screen-space Shadow 与 Surface Cache GI 调度代码"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.8/Engine/Shaders/Private",
+      "note": "UE 5.8.3 的 Base Pass、Deferred Lighting、Reflection Environment、AO、阴影与 Lumen Shader"
+    },
+    {
+      "path": "C:/Program Files/Epic Games/UE_5.8/Engine/Source/Runtime/Renderer/Private",
+      "note": "UE 5.8.3 Release-5.8 的渲染器 C++ 源码，后续引用以本机 5.8.3 为准"
+    }
+  ],
+  "notes": "文章理论主干使用 PBRT 4e；实时公开案例使用 Google Filament 与 EA Frostbite 官方资料；引擎源码案例固定为 Unity 6000.3.23f1 / URP 17.3.0 和 Unreal Engine 5.8.3。RenderDoc 仅作为后续实际游戏案例的分析工具，不在正文中单列工具章节。官方来源：https://www.pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/The_Light_Transport_Equation ; https://google.github.io/filament/Filament.md.html ; https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/course-notes-moving-frostbite-to-pbr-v2.pdf"
+}
