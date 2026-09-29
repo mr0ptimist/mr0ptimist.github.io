@@ -29,6 +29,9 @@ node scripts/cdp/order_check.js http://127.0.0.1:8899/local/ expected.json
 
 # 4) 缩略图渲染 + 缓存：冷启动写缓存 → 刷新 0 请求、耗时骤降、画面一致
 node scripts/cdp/thumb_check.js http://127.0.0.1:8899/local/ 16
+
+# 5) Mermaid 全屏：打开、滚轮缩放、左键平移、Esc 退出与状态恢复
+node scripts/cdp/mermaid_fullscreen_check.js http://127.0.0.1:8899/posts/网站能力展示/
 ```
 
 `/posts/` 同理（把 URL 和期望值的路径换掉即可）。三个脚本失败时退出码均为 1。

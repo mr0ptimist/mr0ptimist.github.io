@@ -57,6 +57,7 @@ function postProcessMermaid() {
     });
     attachPan(svg.closest('pre.mermaid'));
     attachInlineZoom(svg.closest('pre.mermaid'));
+    attachFullscreen(svg.closest('pre.mermaid'));
   });
 }
 
@@ -200,6 +201,166 @@ function attachInlineZoom(pre) {
     pre.scrollLeft = cxp * k - px;
     pre.scrollTop = cyp * k - py;
   }, { passive: false });
+}
+
+function attachFullscreen(pre) {
+  if (!pre) return;
+  var wrap = pre.closest('.mermaid-wrap');
+  if (!wrap || wrap.querySelector('.mermaid-fullscreen-button')) return;
+
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'mermaid-fullscreen-button';
+  button.setAttribute('aria-label', '全屏查看图表');
+  button.title = '全屏查看';
+  button.textContent = '⛶';
+  button.addEventListener('click', function () { openMermaidFullscreen(pre, button); });
+  wrap.appendChild(button);
+}
+
+var activeMermaidFullscreen = null;
+
+function openMermaidFullscreen(pre, trigger) {
+  var svg = pre && pre.querySelector('svg');
+  if (!svg) return;
+  if (activeMermaidFullscreen) activeMermaidFullscreen();
+
+  var sourceRect = svg.getBoundingClientRect();
+  var parent = pre.parentNode;
+  var placeholder = document.createElement('div');
+  placeholder.className = 'mermaid-fullscreen-placeholder';
+  placeholder.style.height = pre.getBoundingClientRect().height + 'px';
+  parent.insertBefore(placeholder, pre);
+
+  var viewer = document.createElement('div');
+  viewer.className = 'mermaid-fullscreen';
+  viewer.setAttribute('role', 'dialog');
+  viewer.setAttribute('aria-modal', 'true');
+  viewer.setAttribute('aria-label', 'Mermaid 图表全屏查看器');
+
+  var canvas = document.createElement('div');
+  canvas.className = 'mermaid-fullscreen-canvas';
+  var closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'mermaid-fullscreen-close';
+  closeButton.setAttribute('aria-label', '退出全屏');
+  closeButton.title = '退出全屏 (Esc)';
+  closeButton.textContent = '×';
+  viewer.appendChild(canvas);
+  viewer.appendChild(closeButton);
+  document.body.appendChild(viewer);
+  canvas.appendChild(pre);
+  document.body.classList.add('mermaid-fullscreen-open');
+
+  var savedStyle = svg.getAttribute('style');
+  var savedWidth = svg.getAttribute('width');
+  var savedHeight = svg.getAttribute('height');
+  var savedScrollLeft = pre.scrollLeft;
+  var savedScrollTop = pre.scrollTop;
+  var vb = (svg.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+  var ratio = vb.length === 4 && vb[2] > 0 && vb[3] > 0 ? vb[3] / vb[2] : sourceRect.height / sourceRect.width;
+  if (!isFinite(ratio) || ratio <= 0) ratio = 1;
+
+  var baseW = Math.min(canvas.clientWidth - 64, (canvas.clientHeight - 64) / ratio);
+  var baseH = baseW * ratio;
+  var scale = 1;
+  var tx = (canvas.clientWidth - baseW) / 2;
+  var ty = (canvas.clientHeight - baseH) / 2;
+
+  svg.setAttribute('width', baseW);
+  svg.setAttribute('height', baseH);
+  svg.style.width = baseW + 'px';
+  svg.style.height = baseH + 'px';
+  svg.style.maxWidth = 'none';
+  svg.style.maxHeight = 'none';
+  svg.style.margin = '0';
+  svg.style.transformOrigin = '0 0';
+
+  function applyTransform() {
+    svg.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')';
+  }
+  applyTransform();
+
+  function onWheel(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var nextScale = Math.max(0.1, Math.min(12, scale * Math.exp(-e.deltaY * 0.0015)));
+    var rect = canvas.getBoundingClientRect();
+    var px = e.clientX - rect.left;
+    var py = e.clientY - rect.top;
+    var factor = nextScale / scale;
+    tx = px - (px - tx) * factor;
+    ty = py - (py - ty) * factor;
+    scale = nextScale;
+    applyTransform();
+  }
+
+  var dragging = false;
+  var pointerX = 0;
+  var pointerY = 0;
+  function onPointerDown(e) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragging = true;
+    pointerX = e.clientX;
+    pointerY = e.clientY;
+    viewer.classList.add('panning');
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  }
+  function onPointerMove(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    e.stopPropagation();
+    tx += e.clientX - pointerX;
+    ty += e.clientY - pointerY;
+    pointerX = e.clientX;
+    pointerY = e.clientY;
+    applyTransform();
+  }
+  function onPointerUp(e) {
+    if (!dragging) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragging = false;
+    viewer.classList.remove('panning');
+  }
+  function onKeyDown(e) {
+    if (e.key === 'Escape') closeViewer();
+  }
+  function restoreAttribute(name, value) {
+    if (value === null) svg.removeAttribute(name);
+    else svg.setAttribute(name, value);
+  }
+  function closeViewer() {
+    if (!viewer.isConnected) return;
+    canvas.removeEventListener('wheel', onWheel, true);
+    canvas.removeEventListener('pointerdown', onPointerDown, true);
+    canvas.removeEventListener('pointermove', onPointerMove, true);
+    canvas.removeEventListener('pointerup', onPointerUp, true);
+    canvas.removeEventListener('pointercancel', onPointerUp, true);
+    document.removeEventListener('keydown', onKeyDown);
+    parent.replaceChild(pre, placeholder);
+    restoreAttribute('style', savedStyle);
+    restoreAttribute('width', savedWidth);
+    restoreAttribute('height', savedHeight);
+    pre.scrollLeft = savedScrollLeft;
+    pre.scrollTop = savedScrollTop;
+    viewer.remove();
+    document.body.classList.remove('mermaid-fullscreen-open');
+    activeMermaidFullscreen = null;
+    trigger.focus();
+  }
+
+  canvas.addEventListener('wheel', onWheel, { passive: false, capture: true });
+  canvas.addEventListener('pointerdown', onPointerDown, true);
+  canvas.addEventListener('pointermove', onPointerMove, true);
+  canvas.addEventListener('pointerup', onPointerUp, true);
+  canvas.addEventListener('pointercancel', onPointerUp, true);
+  document.addEventListener('keydown', onKeyDown);
+  closeButton.addEventListener('click', closeViewer);
+  activeMermaidFullscreen = closeViewer;
+  closeButton.focus();
 }
 
 /* ==================== 远程 mmd 文件渲染 ====================
