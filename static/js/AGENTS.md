@@ -40,6 +40,8 @@
 
 - **不引入 bundler**，不改成 ES module。保持 classic script + `importScripts()`。
 - **BC6H/BC7 不解码进 Worker**，依赖 WebGL context，留在主线程 `dds-parser.js`。
+- **统一帧接口**：`DDS.parse(buf).getFrame(mip, slice, step)` 返回 `{w,h,pixels,rawPixels,normMin,normMax}`；`getMip` 仅兼容返回 RGBA8。CPU 主线程和 Worker 均调用 `ImageCodecDDS.parse/decodeCPU`，UI 不自行解析浮点数据。
+- **损坏输入**：解析校验完整 mip/array 载荷；DX10 像素偏移固定为 148，禁止用 128 回退吞掉扩展头。Worker 每个请求均返回成功帧或明确错误。
 - **WebGL 回读不要翻转行序**：顶点着色器 `t = p*0.5+0.5` 已把纹理第 0 行放在视口第 0 行，`readPixels` 回读第 0 行就是图像第 0 行（top-down）。再加一次行翻转 = 上下颠倒（BC7/BC6H 曾因此整图翻转）。BC6H 是浮点格式，回读要走 `RGBA32F` + `EXT_color_buffer_float` + `readPixels(...,gl.FLOAT,...)`，否则 HDR 值被裁到 0-1。
 - **翻转只在明确要求时生效**：默认不翻转；只有 JSON sidecar 的 `flip_y`（或用户点翻转按钮）才翻转。
 - **DX10 uncompressed 格式必须从 `DXGI_BPP` 表设置 `bpp`**，漏设会导致像素读取偏移错误。

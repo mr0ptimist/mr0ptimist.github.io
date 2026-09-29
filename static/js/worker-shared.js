@@ -15,7 +15,7 @@
 
   // ---- Binary readers ----
   function r8(buf, off) { return buf[off]; }
-  function r32(buf, off) { return (buf[off])|(buf[off+1]<<8)|(buf[off+2]<<16)|(buf[off+3]<<24); }
+  function r32(buf, off) { return ((buf[off])|(buf[off+1]<<8)|(buf[off+2]<<16)|(buf[off+3]<<24)) >>> 0; }
   function r32s(buf, off) { var v = r32(buf,off); return v > 0x7FFFFFFF ? v - 0x100000000 : v; }
   function r64(buf, off) { var lo = r32(buf,off), hi = r32(buf,off+4); return hi * 0x100000000 + lo; }
   function str4(buf, off) { return String.fromCharCode(r8(buf,off),r8(buf,off+1),r8(buf,off+2),r8(buf,off+3)); }
@@ -238,8 +238,11 @@
       return { fourCC:fourCC, dxgi:87, type:'B8G8R8A8_UNORM', family:'BGRA8', isComp:false, bpp:32, swizzle:'bgra' };
     if (bc===32 && amask===0xFF && bmask===0xFF00 && gmask===0xFF0000 && rmask===0xFF000000)
       return { fourCC:fourCC, dxgi:87, type:'B8G8R8A8_UNORM', family:'BGRA8', isComp:false, bpp:32, swizzle:'abgr' };
-    if (bc===32) return { fourCC:fourCC, dxgi:28, type:'R8G8B8A8_UNORM', family:'RGBA8', isComp:false, bpp:32 };
-    return { fourCC:fourCC, dxgi:28, type:'R8G8B8A8_UNORM', family:'RGBA8', isComp:false, bpp:32 };
+    if (bc===16 && rmask===0xFFFF && !gmask && !bmask && !amask)
+      return {fourCC:fourCC,dxgi:56,type:'R16_UNORM',family:'R16',isComp:false,bpp:16};
+    if (bc===32 && !amask && gmask===0xFF00 && ((rmask===0xFF && bmask===0xFF0000)||(rmask===0xFF0000 && bmask===0xFF)))
+      return {fourCC:fourCC,dxgi:rmask===0xFF?28:88,type:'RGBX8_UNORM',family:rmask===0xFF?'RGBA8':'BGRA8',isComp:false,bpp:32,opaque:true};
+    return {fourCC:fourCC,dxgi:0,type:'UNKNOWN',family:'UNKNOWN',isComp:false,bpp:0};
   }
 
   // ---- BC1 block decode (4×4 → RGBA8) ----

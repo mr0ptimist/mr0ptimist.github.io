@@ -188,7 +188,7 @@
     var nextWorker = 0;
 
     var myScript = document.querySelector('script[src*="image-viewer.js"]');
-    var workerUrl = myScript ? myScript.src.replace(/image-viewer\.js(\?[^"]*)?$/, 'decode-worker.js?v=24') : '/js/decode-worker.js?v=24';
+    var workerUrl = myScript ? myScript.src.replace(/image-viewer\.js(\?[^"]*)?$/, 'decode-worker.js?v=25') : '/js/decode-worker.js?v=25';
 
     // onerror 事件里能拿到的信息优先用于错误显示，拿不到就用通用文案
     function workerErrorText(ev, fallback) {
@@ -337,8 +337,8 @@
     var exrInfo0 = exrCache.get(img.src);
     var fam0 = '';
     var isExr = !!exrInfo0;
-    if (ddsInfo0) { normMin = ddsInfo0.normMin || 0; normMax = ddsInfo0.normMax || 1; rawPixels = ddsInfo0.rawPixels; fam0 = ddsInfo0.dds ? ddsInfo0.dds.fmt.family : ''; }
-    else if (exrInfo0) { normMin = exrInfo0.normMin || 0; normMax = exrInfo0.normMax || 1; rawPixels = exrInfo0.rawPixels; fam0 = 'EXR'; }
+    if (ddsInfo0) { normMin = ddsInfo0.normMin || 0; normMax = Number.isFinite(ddsInfo0.normMax) ? ddsInfo0.normMax : 1; rawPixels = ddsInfo0.rawPixels; fam0 = ddsInfo0.dds ? ddsInfo0.dds.fmt.family : ''; }
+    else if (exrInfo0) { normMin = exrInfo0.normMin || 0; normMax = Number.isFinite(exrInfo0.normMax) ? exrInfo0.normMax : 1; rawPixels = exrInfo0.rawPixels; fam0 = 'EXR'; }
     curLo = normMin; curHi = normMax;
     // 单通道格式（BC4/R8/R16/R32F/D32S8 等）：按 R 通道着色（RenderDoc 风格）——
     // G/B 清零，默认 RGB 视图呈红色，点 R 通道按钮才看灰度
@@ -806,78 +806,15 @@
 
       // 当前帧（mip × slice）的原子切换（缺陷 8）：整帧算好后一次性替换全部状态
       function buildFrame(cached) {
-        var dds = cached.dds;
-        if (curMip === 0 && curSlice === 0 && cached.mip0) {
-          return { px: cached.mip0, w: cached.w || dds.w, h: cached.h || dds.h,
-                   normMin: cached.normMin || 0, normMax: cached.normMax || 1,
-                   rawPixels: cached.rawPixels || null, cache: cached };
+        if(curMip===0&&curSlice===0&&cached.mip0) {
+          return {px:cached.mip0,w:cached.w,h:cached.h,rawPixels:cached.rawPixels,
+            normMin:cached.normMin,normMax:cached.normMax,cache:cached};
         }
-        var m = dds.mipList && dds.mipList[curMip];
-        var mw = (m && m.w) || Math.max(1, dds.w >> curMip);
-        var mh = (m && m.h) || Math.max(1, dds.h >> curMip);
-        if (typeof dds.getFrame === 'function') {
-          try {
-            var f = dds.getFrame(curMip, curSlice);
-            if (f && f.pixels && f.pixels.length === mw * mh * 4) {
-              var fr = frameRange(f.rawPixels, f.normMin, f.normMax);
-              return { px: f.pixels, w: f.w || mw, h: f.h || mh, rawPixels: f.rawPixels || null,
-                       normMin: fr.normMin, normMax: fr.normMax, cache: cached };
-            }
-          } catch (e) { /* 接口不匹配：退回 getMip */ }
-        }
-        var px = dds.getMip(curMip, curSlice);
-        if (!px) return null;
-        // getMip 只给「按该帧自身范围拉伸到 0..255」的字节且不给 mn/mx（不可逆），逐帧 raw 只能自己重建
-        var rf = rawFloatFrame(dds, curMip, curSlice);
-        var rng = frameRange(rf, null, null);
-        return { px: px, w: mw, h: mh, normMin: rng.normMin, normMax: rng.normMax, rawPixels: rf, cache: cached };
+        var f=cached.dds.getFrame(curMip,curSlice);
+        return f ? {px:f.pixels,w:f.w,h:f.h,rawPixels:f.rawPixels,
+          normMin:f.normMin,normMax:f.normMax,cache:cached} : null;
       }
 
-      // 只覆盖简单浮点布局，其它家族退回中性 0..1（精确范围需要 dds-parser 提供逐帧 raw）
-      var RAW_LAYOUT = {
-        R32F:{c:1,b:4}, R16F:{c:1,b:2,h:1}, D32S8:{c:1,b:4,s:8},
-        R32G32F:{c:2,b:4}, R16G16F:{c:2,b:2,h:1},
-        RGB96F:{c:3,b:4}, RGBA128F:{c:4,b:4}, RGBA64F:{c:4,b:2,h:1}
-      };
-      function rawFloatFrame(dds, n, slice) {
-        try {
-          var lay = RAW_LAYOUT[dds.fmt && dds.fmt.family], m = dds.mipList && dds.mipList[n];
-          if (!lay || !m || !dds.raw) return null;
-          var off = m.off, cnt = m.w * m.h, per = lay.s || lay.c * lay.b;
-          if (dds.resDim === 4) { if (slice >= (m.depth || 1)) return null; off += slice * m.sliceSize; }
-          else if (slice) { if (slice >= dds.arraySize) return null; off += slice * dds.faceByteSize; }
-          if (off + cnt * per > dds.raw.byteLength) return null;
-          var dv = new DataView(dds.raw.buffer, dds.raw.byteOffset + off, cnt * per), rf = new Float32Array(cnt * 4);
-          for (var i = 0; i < cnt; i++) {
-            var o = i * per, r = rawAt(dv, lay, o, 0);
-            rf[i*4] = r;
-            rf[i*4+1] = lay.c > 1 ? rawAt(dv, lay, o, 1) : r;
-            rf[i*4+2] = lay.c > 2 ? rawAt(dv, lay, o, 2) : (lay.c > 1 ? 0 : r);
-            rf[i*4+3] = lay.c > 3 ? rawAt(dv, lay, o, 3) : 1;
-          }
-          return rf;
-        } catch (e) { return null; }
-      }
-      function rawAt(dv, lay, o, c) {
-        var v = lay.h ? h2f(dv.getUint16(o + c * lay.b, true)) : dv.getFloat32(o + c * lay.b, true);
-        return isFinite(v) ? v : 0;
-      }
-      function h2f(x) {
-        var s = (x & 0x8000) ? -1 : 1, e = (x >> 10) & 31, m = x & 1023;
-        if (e === 31) return m ? NaN : s * Infinity;
-        return s * (e ? (1 + m / 1024) * Math.pow(2, e - 15) : m * Math.pow(2, -24));
-      }
-      // 单值帧的范围会让滑块零宽，退化成中性 0..1
-      function frameRange(rawPixels, nMin, nMax) {
-        var mn = Infinity, mx = -Infinity;
-        if (rawPixels) for (var i = 0; i < rawPixels.length; i += 4) {
-          var v = rawPixels[i]; if (isFinite(v)) { if (v < mn) mn = v; if (v > mx) mx = v; }
-        }
-        if (!(mx > mn) && typeof nMin === 'number' && typeof nMax === 'number' && nMax > nMin) { mn = nMin; mx = nMax; }
-        return mx > mn ? { normMin: mn, normMax: mx } : { normMin: 0, normMax: 1 };
-      }
-
-      // 原子应用一帧：下游读的全部状态先落定，最后才触发重绘，不允许旧帧残留
       function applyFrame(frame) {
         straight = frame.px;
         curW = frame.w; curH = frame.h;
@@ -905,15 +842,15 @@
       }
 
       var renderSliceMip = function(s, n) {
+        var previousSlice = curSlice, previousMip = curMip;
         if (s !== undefined) curSlice = s;
         if (n !== undefined) curMip = n;
         var cached = ddsCache.get(img.src);
         if (!cached || !cached.dds) return;  // EXR 无 mip/slice：保持原行为，什么都不做
         var frame = buildFrame(cached);
         if (!frame) {
-          // 越界：1×1 品红占位，不改动当前帧状态
-          var cv = wrapper.querySelector('canvas');
-          if (cv) { cv.width = 1; cv.height = 1; var ectx = cv.getContext('2d'); ectx.fillStyle = '#ff00ff'; ectx.fillRect(0,0,1,1); }
+          curSlice = previousSlice; curMip = previousMip;
+          if (sizeBadge) sizeBadge.textContent = '解码失败：' + (DDS.lastError || '无效 mip / slice');
           return;
         }
         applyFrame(frame);
@@ -1181,9 +1118,10 @@
         if (!dds) throw 'parse';
         var dfam = dds.fmt.family;
         if (dds.fmt.isComp && dfam!=='BC1'&&dfam!=='BC3'&&dfam!=='BC4'&&dfam!=='BC5') {
-          var mip0 = dds.getMip(0);
-          if (!mip0) throw 'decode';
-          ddsCache.set(img.src, {dds:dds, mip0:mip0, w:dds.w, h:dds.h, normMin:0, normMax:1, rawPixels:null});
+          var frame = dds.getFrame(0);
+          if (!frame) throw new Error(DDS.lastError || 'DDS decode failed');
+          var mip0 = frame.pixels;
+          ddsCache.set(img.src, {dds:dds, mip0:mip0, w:frame.w, h:frame.h, normMin:frame.normMin, normMax:frame.normMax, rawPixels:frame.rawPixels});
           img.style.outline = '';
           processImage(img, dds.w, dds.h, mip0);
           return;
@@ -1192,7 +1130,7 @@
         var jsonData = jsonCache.get(jsonUrl);
         if (jsonData) {
           var rdFmt = (jsonData.renderdoc || {}).format || '';
-          if (/TYPELESS/i.test(rdFmt) && dds.fmt.family === 'R16F') typeOverride = 'R16';
+          if (/TYPELESS/i.test(rdFmt) && dds.fmt.family === 'R16F') { typeOverride = 'R16'; dds.fmt.type='R16_UNORM'; dds.fmt.family='R16'; }
         }
         var targetDim = (img.closest('td') || img.closest('th')) ? 800 : 1000;
         decodeWorker.decode('dds', buf, function(result) {
@@ -1203,7 +1141,7 @@
           ddsCache.set(img.src, {dds:dds, mip0:result.pixels, w:result.w, h:result.h, normMin:result.normMin, normMax:result.normMax, rawPixels:result.rawPixels});
           processImage(img, result.w, result.h, result.pixels);
         }, false, typeOverride, targetDim);
-      }).catch(function(e){ img.style.outline = ''; showErrorPlaceholder(img); });
+      }).catch(function(e){ img.style.outline = ''; showErrorPlaceholder(img, null, null, e.message || String(e)); });
       return;
     }
 
