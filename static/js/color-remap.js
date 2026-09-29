@@ -68,7 +68,7 @@
           var fv = isFinite(v) ? v : 0;
           dst[i + c] = Math.min(255, Math.max(0, Math.round((fv - lo) / range * 255)));
         }
-        dst[i + 3] = 255;
+        dst[i + 3] = src[i + 3];
       }
     } else if (nMin !== 0 || nMax !== 1) {
       var origRange = nMax - nMin;

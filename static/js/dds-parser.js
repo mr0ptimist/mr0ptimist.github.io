@@ -23,75 +23,83 @@ var DDS = (function(){
   var _glCtx = null;
   function _getGL() {
     if (_glCtx && !_glCtx.isContextLost()) return _glCtx;
-    var c = document.createElement('canvas');
-    // alpha:false 必须——默认 alpha:true 的画布按预乘 alpha 参与合成，
-    // drawImage→getImageData 读回时 RGB 被 A 压掉（暗 alpha 贴图颜色全毁：实测 R/G/B 全部塌到 ≈B 通道）
-    _glCtx = c.getContext('webgl2', {preserveDrawingBuffer: true, alpha: false})
-          || c.getContext('webgl', {preserveDrawingBuffer: true, alpha: false});
+    _glCtx = document.createElement('canvas').getContext('webgl2', {alpha: false});
     return _glCtx;
   }
 
   function _decodeBC7_WebGL(data, w, h, fmt) {
-    var gl = _getGL();
-    if (!gl) return null;
-    var ext = gl.getExtension('EXT_texture_compression_bptc');
-    if (!ext) return null;
-    var internalFmt;
-    if (fmt.family==='BC7') internalFmt = (fmt.dxgi===99) ? ext.COMPRESSED_SRGB_ALPHA_BPTC_UNORM_EXT : ext.COMPRESSED_RGBA_BPTC_UNORM_EXT;
-    else if (fmt.family==='BC6H') internalFmt = (fmt.dxgi===96) ? ext.COMPRESSED_RGB_BPTC_SIGNED_FLOAT_EXT : ext.COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT_EXT;
-    else return null;
-    var copy = new Uint8Array(data);
-    if (!gl._bcProg) {
-      var vs = gl.createShader(gl.VERTEX_SHADER);
-      gl.shaderSource(vs, 'attribute vec2 p;varying vec2 t;void main(){gl_Position=vec4(p,0,1);t=p*0.5+0.5;}');
-      gl.compileShader(vs);
-      var fs = gl.createShader(gl.FRAGMENT_SHADER);
-      gl.shaderSource(fs, 'precision highp float;varying vec2 t;uniform sampler2D s;void main(){gl_FragColor=texture2D(s,t);}');
-      gl.compileShader(fs);
-      var prog = gl.createProgram();
-      gl.attachShader(prog, vs); gl.attachShader(prog, fs);
-      gl.bindAttribLocation(prog, 0, 'p');
-      gl.linkProgram(prog);
-      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { return null; }
-      var buf = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
-      gl._bcProg = prog;
-      gl._bcProg._buf = buf;
+    var gl, tex, fb, rb;
+    function fail(message) {
+      if (typeof DDS !== 'undefined' && DDS) DDS.lastError = message;
+      return null;
     }
     try {
-      var tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.compressedTexImage2D(gl.TEXTURE_2D, 0, internalFmt, w, h, 0, copy);
+      gl = _getGL();
+      if (!gl) return fail('WebGL2 unavailable');
+      var ext = gl.getExtension('EXT_texture_compression_bptc');
+      if (!ext) return fail('BPTC texture decoding unavailable');
+      var hdr = fmt.family === 'BC6H';
+      if (!hdr && fmt.family !== 'BC7') return fail('Unsupported GPU format');
+      if (hdr && !gl.getExtension('EXT_color_buffer_float')) return fail('Floating-point framebuffer unavailable');
+      if (w > gl.getParameter(gl.MAX_TEXTURE_SIZE) || h > gl.getParameter(gl.MAX_TEXTURE_SIZE) ||
+          w > gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) || h > gl.getParameter(gl.MAX_RENDERBUFFER_SIZE))
+        return fail('Texture exceeds WebGL size limit');
+      var internalFmt = hdr
+        ? (fmt.dxgi === 96 ? ext.COMPRESSED_RGB_BPTC_SIGNED_FLOAT_EXT : ext.COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT_EXT)
+        : ext.COMPRESSED_RGBA_BPTC_UNORM_EXT; // 保留编码字节，与 CPU 的 sRGB 预览一致。
+      if (!gl._bcProg) {
+        var vs = gl.createShader(gl.VERTEX_SHADER), fs = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(vs, 'attribute vec2 p;varying vec2 t;void main(){gl_Position=vec4(p,0,1);t=p*0.5+0.5;}');
+        gl.shaderSource(fs, 'precision highp float;varying vec2 t;uniform sampler2D s;void main(){gl_FragColor=texture2D(s,t);}');
+        gl.compileShader(vs); gl.compileShader(fs);
+        var prog = gl.createProgram();
+        gl.attachShader(prog, vs); gl.attachShader(prog, fs);
+        gl.bindAttribLocation(prog, 0, 'p'); gl.linkProgram(prog);
+        gl.deleteShader(vs); gl.deleteShader(fs);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+          gl.deleteProgram(prog);
+          return fail('GPU decode shader failed');
+        }
+        var vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,3,-1,-1,3]), gl.STATIC_DRAW);
+        gl._bcProg = prog;
+        gl._bcProg._buf = vertexBuffer;
+      }
+      for (var errorCount = 0; errorCount < 8 && gl.getError() !== gl.NO_ERROR; errorCount++) {}
+      tex = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.compressedTexImage2D(gl.TEXTURE_2D, 0, internalFmt, w, h, 0, new Uint8Array(data));
+      if (gl.getError() !== gl.NO_ERROR) return fail('Compressed texture upload failed');
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      // 必须画进 FBO 再 readPixels：默认 framebuffer 的 alpha 位取决于 canvas 属性（alpha:false 时读回恒 255），
-      // 而数据贴图的 A 通道有语义（厚度/标志位），只有 RGBA8 的 FBO 能原样读回
-      var fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-      var rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
-      gl.renderbufferStorage(gl.RENDERBUFFER, gl.RGBA8, w, h);
+      fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+      gl.renderbufferStorage(gl.RENDERBUFFER, hdr ? gl.RGBA32F : gl.RGBA8, w, h);
       gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, rb);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE)
+        return fail('GPU decode framebuffer incomplete');
       gl.viewport(0, 0, w, h);
+      gl.disable(gl.BLEND); gl.disable(gl.DITHER);
       gl.useProgram(gl._bcProg);
       gl.bindBuffer(gl.ARRAY_BUFFER, gl._bcProg._buf);
-      gl.enableVertexAttribArray(0);
-      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.deleteTexture(tex);
-      var out = new Uint8Array(w * h * 4);
-      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, out);   // readPixels 是 bottom-up，要翻成 top-down
-      gl.deleteFramebuffer(fb);
-      gl.deleteRenderbuffer(rb);
-      var row = new Uint8Array(w * 4);
-      for (var y = 0; y < (h >> 1); y++) {
-        var a = y * w * 4, b = (h - 1 - y) * w * 4;
-        row.set(out.subarray(a, a + w * 4));
-        out.copyWithin(a, b, b + w * 4);
-        out.set(row, b);
-      }
+      var out = hdr ? new Float32Array(w * h * 4) : new Uint8Array(w * h * 4);
+      gl.readPixels(0, 0, w, h, gl.RGBA, hdr ? gl.FLOAT : gl.UNSIGNED_BYTE, out); // shader 已使纹理行与回读行同向。
+      if (gl.getError() !== gl.NO_ERROR) return fail('GPU decode readback failed');
       return out;
-    } catch(e) { return null; }
+    } catch (e) {
+      return fail('GPU decode failed: ' + e.message);
+    } finally {
+      if (gl) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        if (tex) gl.deleteTexture(tex);
+        if (fb) gl.deleteFramebuffer(fb);
+        if (rb) gl.deleteRenderbuffer(rb);
+      }
+    }
   }
 
   // ---- DDS Parse (header + mip table) ----
@@ -105,7 +113,10 @@ var DDS = (function(){
     var caps2 = S.r32(view, 112);
     mips = S.r32(view, 28);
     if (mips === 0) mips = 1;
+    var D = self.ImageCodecDDS;
+    if (D && D.checkHeader(w, h, mips, 1)) return null;
     var fmt = S.detectFmt(view);
+    if (D && D.checkFormat(fmt)) return null;
     var dataOff = fmt.fourCC === 'DX10' ? 148 : 128;
 
     var dx10Misc = 0, dx10Array = 1, resDim = 3, alphaMode = 0;

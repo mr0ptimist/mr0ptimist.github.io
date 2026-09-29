@@ -18,6 +18,7 @@ drawImage→getImageData 读回会把 RGB 压向 A（暗 alpha 贴图颜色整�
 并保证 alpha:false。本脚本锁死这条路径的回归。
 """
 import json
+import hashlib
 import os
 import subprocess
 import sys
@@ -49,15 +50,17 @@ GOLDEN = {                      # 对照 RenderDoc 自己的解码（纹理查�
 def main() -> int:
     args = sys.argv[1:]
     dds = Path(args[0]).resolve() if args else find_default_dds()
-    expected = json.loads(Path(args[1]).read_text(encoding="utf-8")) if len(args) > 1 else GOLDEN
     if not dds.exists():
         raise SystemExit(f"找不到 {dds}")
-    if dds.stat().st_size != 65684:
-        print(f"注意: {dds.name} 不是 golden 素材（期望 65684 字节），跳过判定只打印实测", file=sys.stderr)
-        expected = None
+    input_hash = hashlib.sha256(dds.read_bytes()).hexdigest()
+    expected = json.loads(Path(args[1]).read_text(encoding="utf-8")) if len(args) > 1 else (
+        GOLDEN if input_hash == "b6bebf0f7aa1e55a0bb2eebefd2cdeb4efe5fd382d576eb06e611fe98b7acc42" else None
+    )
+    codec_script = '<script src="/js/dds-codec.js"></script>' if (ROOT / "static/js/dds-codec.js").exists() else ''
 
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
 <script src="/js/worker-shared.js"></script>
+{codec_script}
 <script src="/js/dds-parser.js"></script>
 <script>
 window.RESULT = null;
@@ -83,7 +86,10 @@ window.RESULT = null;
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         (tmp / "js").mkdir()
-        for f in ("worker-shared.js", "dds-parser.js"):
+        scripts = ["worker-shared.js", "dds-parser.js"]
+        if codec_script:
+            scripts.insert(1, "dds-codec.js")
+        for f in scripts:
             (tmp / "js" / f).write_bytes((ROOT / "static" / "js" / f).read_bytes())
         (tmp / dds.name).write_bytes(dds.read_bytes())
         (tmp / "page.html").write_text(html, encoding="utf-8")
@@ -114,6 +120,7 @@ window.RESULT = null;
         print(f"解码失败: {got['error']}", file=sys.stderr)
         return 1
     print(f"文件: {dds}")
+    print(f"SHA256: {input_hash}")
     print(f"尺寸: {got['size'][0]}x{got['size'][1]}  格式: {got.get('fmt')}")
     for k in "rgba":
         lo, hi, mean = got[k]

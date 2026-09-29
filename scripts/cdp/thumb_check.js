@@ -55,7 +55,7 @@ async function measure(page) {
     await sleep(3000);                     // 等 blob 编码 + c.put 落盘
     const req1 = await page.evaluate(`JSON.stringify(window.__req)`);
     const sig1 = await page.evaluate(SIG);
-    const cacheN = await page.evaluate(`caches.open('blog-thumb-v1').then(function(c){ return c.keys(); }).then(function(k){ return k.length; })`);
+    const cacheN = await page.evaluate(`caches.open('blog-thumb-v2').then(function(c){ return c.keys(); }).then(function(k){ return k.length; })`);
     console.log(`  耗时 ${(first.ms/1000).toFixed(1)}s，canvas ${first.canvases} 个，请求 ${req1}，缓存条目 ${cacheN}`);
 
     console.log('[加载 2] 刷新（应命中缓存）');

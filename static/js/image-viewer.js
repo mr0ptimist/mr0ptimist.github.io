@@ -28,7 +28,7 @@
   // 列表页缩略图：解码后缩到显示尺寸（≤200px），小图存入 Cache Storage
   // 缓存键 = 图片 URL，值 = 小图 blob（几 KB~几十 KB）。刷新时命中直接画，跳过下载与解码。
   // 想强制失效旧缓存（如重新导出了同名 DDS）时，升 THUMB_CACHE 版本号。
-  var THUMB_CACHE = 'blog-thumb-v1';
+  var THUMB_CACHE = 'blog-thumb-v2';
   var thumbCachePromise = null;
   function thumbCache() {
     if (typeof caches === 'undefined') return Promise.resolve(null);
@@ -176,36 +176,113 @@
   });
 
   // ---- Worker pool (off-main-thread DDS/EXR decode) ----
+  // 不变量：每个请求恰好结算一次（each request settles exactly once）。6 条结束路径（回包 / onerror /
+  // messageerror / 超时 / 构造失败 / postMessage 抛错）都只摘自己那条 pending，绝不静默挂起、绝不替别人收尾。
+  var WORKER_REQUEST_TIMEOUT_MS = 15000; // 单请求超时：正常数秒内回包，超时即判死走失败分支
+
   var decodeWorker = (function(){
     var NUM_WORKERS = 4;
-    var workers = [];
-    var callbacks = {};
+    var workerStates = [];  // 每个实例一份状态：{w, pending:{id:1}, dead, failReason}
+    var pendingById = {};   // id -> {callback, owner, timer}；条目里带 owner 归属，便于按 worker 批量结算
     var nextId = 0;
     var nextWorker = 0;
 
     var myScript = document.querySelector('script[src*="image-viewer.js"]');
-    var workerUrl = myScript ? myScript.src.replace(/image-viewer\.js(\?[^"]*)?$/, 'decode-worker.js?v=23') : '/js/decode-worker.js?v=23';
+    var workerUrl = myScript ? myScript.src.replace(/image-viewer\.js(\?[^"]*)?$/, 'decode-worker.js?v=24') : '/js/decode-worker.js?v=24';
+
+    // onerror 事件里能拿到的信息优先用于错误显示，拿不到就用通用文案
+    function workerErrorText(ev, fallback) {
+      var parts = [];
+      if (ev && ev.message) parts.push(String(ev.message));
+      if (ev && ev.filename) {
+        var f = String(ev.filename).split('/').pop();
+        parts.push(f + (ev.lineno ? ':' + ev.lineno : ''));
+      }
+      return parts.length ? parts.join(' @ ') : fallback;
+    }
+
+    // 唯一结算入口：同一个 id 只有第一次调用生效，之后一律忽略（恰好一次）
+    function settleOnce(id, result) {
+      if (id === undefined || id === null) return false;
+      var entry = pendingById[id];
+      if (!entry) return false;   // 已被其它路径结算（超时/错误/回包抢跑）→ 忽略
+      delete pendingById[id];
+      if (entry.timer) { clearTimeout(entry.timer); entry.timer = null; }
+      if (entry.owner && entry.owner.pending) delete entry.owner.pending[id];
+      try { entry.callback(result); } catch (err) { /* 调用方自身异常不牵连其它请求 */ }
+      return true;
+    }
+
+    // worker 级故障：只结算这个实例名下的请求，其它 worker 上排队的请求不受影响
+    function failWorker(owner, reason) {
+      owner.dead = true;
+      owner.failReason = reason;
+      var ids = Object.keys(owner.pending);
+      for (var k = 0; k < ids.length; k++) settleOnce(ids[k], {id: +ids[k], ok: false, error: reason});
+    }
 
     for (var i = 0; i < NUM_WORKERS; i++) {
-      var w = new Worker(workerUrl);
-      w.onmessage = function(e) {
-        var cb = callbacks[e.data.id];
-        if (cb) { delete callbacks[e.data.id]; cb(e.data); }
-      };
-      workers.push(w);
+      var owner = {w: null, pending: {}, dead: false, failReason: null};
+      workerStates.push(owner);
+      var w = null;
+      try {
+        w = new Worker(workerUrl);
+      } catch (err) {
+        // 构造失败（URL 非法 / CSP 拦截等）：实例标死，轮到它的请求异步失败
+        owner.dead = true;
+        owner.failReason = 'worker init failed: ' + ((err && err.message) ? err.message : String(err));
+        continue;
+      }
+      owner.w = w;
+      w.onmessage = (function(o) {
+        return function(e) { settleOnce(e && e.data ? e.data.id : undefined, e.data); };
+      })(owner);
+      w.onerror = (function(o) {
+        return function(ev) {
+          if (ev && ev.preventDefault) ev.preventDefault();  // 阻止冒泡成全局 error
+          failWorker(o, workerErrorText(ev, 'worker error'));
+        };
+      })(owner);
+      w.onmessageerror = (function(o) {
+        return function(ev) {
+          if (ev && ev.preventDefault) ev.preventDefault();
+          failWorker(o, 'worker messageerror (回包无法反序列化)');
+        };
+      })(owner);
     }
 
     return {
       decode: function(type, buffer, callback, transfer, typeOverride, targetDim) {
         var id = ++nextId;
-        callbacks[id] = callback;
-        var w = workers[nextWorker % NUM_WORKERS];
-        nextWorker++;
+        // 轮询挑下一个存活实例（全活时等价于原来的 round-robin；死掉的槽位直接跳过）
+        var owner = null;
+        for (var k = 0; k < NUM_WORKERS; k++) {
+          var cand = workerStates[(nextWorker + k) % NUM_WORKERS];
+          if (cand && !cand.dead && cand.w) { owner = cand; nextWorker = (nextWorker + k + 1) % NUM_WORKERS; break; }
+        }
+        if (!owner) {
+          // 实例不可用：异步失败（保持回调时序一致），绝不静默挂起
+          var why = (workerStates[0] && workerStates[0].failReason) ? workerStates[0].failReason : 'worker unavailable';
+          setTimeout(function() { callback({id: id, ok: false, error: why}); }, 0);
+          return id;
+        }
+        var entry = {callback: callback, owner: owner, timer: null};
+        pendingById[id] = entry;
+        owner.pending[id] = 1;
+        // 兜底超时：前 3 条路径都没触发时也必须给这条请求一个了结
+        entry.timer = setTimeout(function() {
+          settleOnce(id, {id: id, ok: false, error: 'decode timeout (' + (WORKER_REQUEST_TIMEOUT_MS / 1000) + 's)'});
+        }, WORKER_REQUEST_TIMEOUT_MS);
         var msg = {id:id, type:type, buffer:buffer};
         if (typeOverride) msg.typeOverride = typeOverride;
         if (targetDim) msg.targetDim = targetDim;
-        if (transfer) w.postMessage(msg, [buffer]);
-        else w.postMessage(msg);
+        try {
+          if (transfer) owner.w.postMessage(msg, [buffer]);
+          else owner.w.postMessage(msg);
+        } catch (err) {
+          settleOnce(id, {id: id, ok: false, error: 'postMessage failed: ' + ((err && err.message) ? err.message : String(err))});
+        }
+        return id;
       }
     };
   })();
@@ -727,36 +804,119 @@
       if (totalArray <= 1) totalArray = parseInt(rd.array_size) || 1;
       var curSlice = 0;
 
+      // 当前帧（mip × slice）的原子切换（缺陷 8）：整帧算好后一次性替换全部状态
+      function buildFrame(cached) {
+        var dds = cached.dds;
+        if (curMip === 0 && curSlice === 0 && cached.mip0) {
+          return { px: cached.mip0, w: cached.w || dds.w, h: cached.h || dds.h,
+                   normMin: cached.normMin || 0, normMax: cached.normMax || 1,
+                   rawPixels: cached.rawPixels || null, cache: cached };
+        }
+        var m = dds.mipList && dds.mipList[curMip];
+        var mw = (m && m.w) || Math.max(1, dds.w >> curMip);
+        var mh = (m && m.h) || Math.max(1, dds.h >> curMip);
+        if (typeof dds.getFrame === 'function') {
+          try {
+            var f = dds.getFrame(curMip, curSlice);
+            if (f && f.pixels && f.pixels.length === mw * mh * 4) {
+              var fr = frameRange(f.rawPixels, f.normMin, f.normMax);
+              return { px: f.pixels, w: f.w || mw, h: f.h || mh, rawPixels: f.rawPixels || null,
+                       normMin: fr.normMin, normMax: fr.normMax, cache: cached };
+            }
+          } catch (e) { /* 接口不匹配：退回 getMip */ }
+        }
+        var px = dds.getMip(curMip, curSlice);
+        if (!px) return null;
+        // getMip 只给「按该帧自身范围拉伸到 0..255」的字节且不给 mn/mx（不可逆），逐帧 raw 只能自己重建
+        var rf = rawFloatFrame(dds, curMip, curSlice);
+        var rng = frameRange(rf, null, null);
+        return { px: px, w: mw, h: mh, normMin: rng.normMin, normMax: rng.normMax, rawPixels: rf, cache: cached };
+      }
+
+      // 只覆盖简单浮点布局，其它家族退回中性 0..1（精确范围需要 dds-parser 提供逐帧 raw）
+      var RAW_LAYOUT = {
+        R32F:{c:1,b:4}, R16F:{c:1,b:2,h:1}, D32S8:{c:1,b:4,s:8},
+        R32G32F:{c:2,b:4}, R16G16F:{c:2,b:2,h:1},
+        RGB96F:{c:3,b:4}, RGBA128F:{c:4,b:4}, RGBA64F:{c:4,b:2,h:1}
+      };
+      function rawFloatFrame(dds, n, slice) {
+        try {
+          var lay = RAW_LAYOUT[dds.fmt && dds.fmt.family], m = dds.mipList && dds.mipList[n];
+          if (!lay || !m || !dds.raw) return null;
+          var off = m.off, cnt = m.w * m.h, per = lay.s || lay.c * lay.b;
+          if (dds.resDim === 4) { if (slice >= (m.depth || 1)) return null; off += slice * m.sliceSize; }
+          else if (slice) { if (slice >= dds.arraySize) return null; off += slice * dds.faceByteSize; }
+          if (off + cnt * per > dds.raw.byteLength) return null;
+          var dv = new DataView(dds.raw.buffer, dds.raw.byteOffset + off, cnt * per), rf = new Float32Array(cnt * 4);
+          for (var i = 0; i < cnt; i++) {
+            var o = i * per, r = rawAt(dv, lay, o, 0);
+            rf[i*4] = r;
+            rf[i*4+1] = lay.c > 1 ? rawAt(dv, lay, o, 1) : r;
+            rf[i*4+2] = lay.c > 2 ? rawAt(dv, lay, o, 2) : (lay.c > 1 ? 0 : r);
+            rf[i*4+3] = lay.c > 3 ? rawAt(dv, lay, o, 3) : 1;
+          }
+          return rf;
+        } catch (e) { return null; }
+      }
+      function rawAt(dv, lay, o, c) {
+        var v = lay.h ? h2f(dv.getUint16(o + c * lay.b, true)) : dv.getFloat32(o + c * lay.b, true);
+        return isFinite(v) ? v : 0;
+      }
+      function h2f(x) {
+        var s = (x & 0x8000) ? -1 : 1, e = (x >> 10) & 31, m = x & 1023;
+        if (e === 31) return m ? NaN : s * Infinity;
+        return s * (e ? (1 + m / 1024) * Math.pow(2, e - 15) : m * Math.pow(2, -24));
+      }
+      // 单值帧的范围会让滑块零宽，退化成中性 0..1
+      function frameRange(rawPixels, nMin, nMax) {
+        var mn = Infinity, mx = -Infinity;
+        if (rawPixels) for (var i = 0; i < rawPixels.length; i += 4) {
+          var v = rawPixels[i]; if (isFinite(v)) { if (v < mn) mn = v; if (v > mx) mx = v; }
+        }
+        if (!(mx > mn) && typeof nMin === 'number' && typeof nMax === 'number' && nMax > nMin) { mn = nMin; mx = nMax; }
+        return mx > mn ? { normMin: mn, normMax: mx } : { normMin: 0, normMax: 1 };
+      }
+
+      // 原子应用一帧：下游读的全部状态先落定，最后才触发重绘，不允许旧帧残留
+      function applyFrame(frame) {
+        straight = frame.px;
+        curW = frame.w; curH = frame.h;
+        normMin = frame.normMin; normMax = frame.normMax;
+        curLo = normMin; curHi = normMax;
+        rawPixels = frame.rawPixels;
+        ddsInfo0 = frame.cache;   // 下游读 ddsInfo0 时必须已是当前帧的信息
+        fam0 = frame.cache.dds ? frame.cache.dds.fmt.family : fam0;
+        pxCache.set(img.src, frame.px);
+        var cv = wrapper.querySelector('canvas');
+        if (!cv) { cv = document.createElement('canvas'); cv.className = 'channel-canvas'; if (samplingNearest) cv.classList.add('sampling-nearest'); wrapper.appendChild(cv); }
+        cv.width = frame.w; cv.height = frame.h;
+        cv.getContext('2d').putImageData(new ImageData(frame.px, frame.w, frame.h), 0, 0);
+        var sz = sizeCanvas(cv, frame.w, frame.h);
+        if (sizeBadge) sizeBadge.textContent = sz.dw + '×' + sz.dh + (sz.dw !== frame.w || sz.dh !== frame.h ? '  (' + frame.w + '×' + frame.h + ')' : '');
+        syncRangeSliders();
+        // 重绘必须等上面所有帧状态落定（按钮回调读的是闭包变量）
+        renderRemapped();
+      }
+
+      // 范围滑块跟随当前帧的 norm 范围
+      function syncRangeSliders() {
+        if (loSlider) { loSlider.min = normMin; loSlider.max = normMax; loSlider.step = (normMax - normMin) / 200; loSlider.value = curLo; loLabel.textContent = curLo.toFixed(2); }
+        if (hiSlider) { hiSlider.min = normMin; hiSlider.max = normMax; hiSlider.step = (normMax - normMin) / 200; hiSlider.value = curHi; hiLabel.textContent = curHi.toFixed(2); }
+      }
+
       var renderSliceMip = function(s, n) {
         if (s !== undefined) curSlice = s;
         if (n !== undefined) curMip = n;
         var cached = ddsCache.get(img.src);
-        if (cached && cached.dds) {
-          var px = cached.dds.getMip(curMip, curSlice);
-          if (!px) {
-            cv = wrapper.querySelector('canvas');
-            if (cv) { cv.width = 1; cv.height = 1; var ectx = cv.getContext('2d'); ectx.fillStyle = '#ff00ff'; ectx.fillRect(0,0,1,1); }
-            return;
-          }
-          var mw = Math.max(1, cached.dds.w >> curMip);
-          var mh = Math.max(1, cached.dds.h >> curMip);
-          // Update norm params and range sliders for new mip
-          normMin = cached.normMin || 0; normMax = cached.normMax || 1;
-          curLo = normMin; curHi = normMax;
-          if (loSlider) { loSlider.min = normMin; loSlider.max = normMax; loSlider.step = (normMax - normMin) / 200; loSlider.value = curLo; loLabel.textContent = curLo.toFixed(2); }
-          if (hiSlider) { hiSlider.min = normMin; hiSlider.max = normMax; hiSlider.step = (normMax - normMin) / 200; hiSlider.value = curHi; hiLabel.textContent = curHi.toFixed(2); }
+        if (!cached || !cached.dds) return;  // EXR 无 mip/slice：保持原行为，什么都不做
+        var frame = buildFrame(cached);
+        if (!frame) {
+          // 越界：1×1 品红占位，不改动当前帧状态
           var cv = wrapper.querySelector('canvas');
-          if (!cv) { cv = document.createElement('canvas'); cv.className = 'channel-canvas'; if (samplingNearest) cv.classList.add('sampling-nearest'); wrapper.appendChild(cv); }
-          cv.width = mw; cv.height = mh;
-          cv.getContext('2d').putImageData(new ImageData(px, mw, mh), 0, 0);
-          var sz = sizeCanvas(cv, mw, mh);
-          if (sizeBadge) sizeBadge.textContent = sz.dw + '×' + sz.dh + (sz.dw !== mw || sz.dh !== mh ? '  (' + mw + '×' + mh + ')' : '');
-          straight = px;
-          pxCache.set(img.src, px);
-          curW = mw; curH = mh;
-          var activeBtn = tb.querySelector('.channel-btn.active');
-          if (activeBtn) activeBtn.click();
+          if (cv) { cv.width = 1; cv.height = 1; var ectx = cv.getContext('2d'); ectx.fillStyle = '#ff00ff'; ectx.fillRect(0,0,1,1); }
+          return;
         }
+        applyFrame(frame);
       };
       var curMip = 0;
 
@@ -968,14 +1128,24 @@
   }
 
   // ---- Image loader ----
-  function showErrorPlaceholder(img, w, h) {
+  // detail：可选的失败原因（worker onerror 的 message/filename/lineno、请求超时、
+  // postMessage 异常等）。能拿到就画在占位图上（画布太窄时退回通用文案），
+  // 完整原因同时写进 title，拿不到就只显示通用文案。
+  function showErrorPlaceholder(img, w, h, detail) {
     w = w || 64; h = h || 64;
     var cv = document.createElement('canvas');
     cv.className = 'channel-canvas'; cv.width = w; cv.height = h;
     var ctx = cv.getContext('2d');
     ctx.fillStyle = '#ff00ff'; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = '#fff'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
-    ctx.fillText('decode error', w/2, h/2);
+    var text = 'decode error';
+    if (detail) {
+      var d = String(detail);
+      cv.title = 'decode error: ' + d;
+      if (d.length > 48) d = d.slice(0, 45) + '...';
+      if (ctx.measureText(text + ' (' + d + ')').width <= w) text += ' (' + d + ')';
+    }
+    ctx.fillText(text, w/2, h/2);
     cv.style.width = Math.min(w, 400) + 'px';
     cv.style.height = Math.min(h, 400) + 'px';
     cv.style.opacity = '0.6';
@@ -996,7 +1166,9 @@
     // DDS
     if (/\.dds$/i.test(img.src)) {
       var ddsCached = ddsCache.get(img.src);
-      if (ddsCached) { processImage(img, ddsCached.dds.w, ddsCached.dds.h, ddsCached.mip0); return; }
+      // 缓存条目里的 w/h 是该帧**实际**尺寸（worker 可能已降采样，≠ dds.w/dds.h）；
+      // 老条目没有 w/h 时才退回 dds 的逻辑尺寸
+      if (ddsCached) { processImage(img, ddsCached.w || ddsCached.dds.w, ddsCached.h || ddsCached.dds.h, ddsCached.mip0); return; }
       var jsonUrl = img.src.replace(/\.dds$/i, '.json');
       if (!jsonCache.has(jsonUrl)) {
         fetch(jsonUrl).then(function(r) { if (r.ok) return r.json(); }).then(function(d) { if (d) jsonCache.set(jsonUrl, d); }).catch(function(){});
@@ -1011,7 +1183,7 @@
         if (dds.fmt.isComp && dfam!=='BC1'&&dfam!=='BC3'&&dfam!=='BC4'&&dfam!=='BC5') {
           var mip0 = dds.getMip(0);
           if (!mip0) throw 'decode';
-          ddsCache.set(img.src, {dds:dds, mip0:mip0, normMin:0, normMax:1, rawPixels:null});
+          ddsCache.set(img.src, {dds:dds, mip0:mip0, w:dds.w, h:dds.h, normMin:0, normMax:1, rawPixels:null});
           img.style.outline = '';
           processImage(img, dds.w, dds.h, mip0);
           return;
@@ -1025,8 +1197,10 @@
         var targetDim = (img.closest('td') || img.closest('th')) ? 800 : 1000;
         decodeWorker.decode('dds', buf, function(result) {
           img.style.outline = '';
-          if (!result.ok) { showErrorPlaceholder(img, dds.w, dds.h); return; }
-          ddsCache.set(img.src, {dds:dds, mip0:result.pixels, normMin:result.normMin, normMax:result.normMax, rawPixels:result.rawPixels});
+          if (!result.ok) { showErrorPlaceholder(img, dds.w, dds.h, result.error); return; }
+          // w/h 存解码结果的实际尺寸：targetDim 降采样后 result.w/h 小于 dds.w/h，
+          // 缓存命中时必须用这个尺寸重放，否则画布尺寸与像素数据不匹配
+          ddsCache.set(img.src, {dds:dds, mip0:result.pixels, w:result.w, h:result.h, normMin:result.normMin, normMax:result.normMax, rawPixels:result.rawPixels});
           processImage(img, result.w, result.h, result.pixels);
         }, false, typeOverride, targetDim);
       }).catch(function(e){ img.style.outline = ''; showErrorPlaceholder(img); });
@@ -1047,7 +1221,7 @@
         if (!buf) throw 'empty';
         decodeWorker.decode('exr', buf, function(result) {
           img.style.outline = '';
-          if (!result.ok) { showErrorPlaceholder(img); return; }
+          if (!result.ok) { showErrorPlaceholder(img, 0, 0, result.error); return; }
           exrCache.set(img.src, {exr:{w:result.w,h:result.h}, rgba8:result.pixels, rawPixels:result.rawPixels, normMin:result.normMin, normMax:result.normMax});
           processImage(img, result.w, result.h, result.pixels);
         }, true);

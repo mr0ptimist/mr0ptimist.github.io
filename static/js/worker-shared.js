@@ -243,13 +243,15 @@
   }
 
   // ---- BC1 block decode (4×4 → RGBA8) ----
-  function bc1Block(src, off, dst) {
+  // force4=true：BC2/BC3 颜色块恒 4 色，索引 3 不是透明色
+  function bc1Block(src, off, dst, force4) {
     var c0 = src[off]|(src[off+1]<<8), c1 = src[off+2]|(src[off+3]<<8);
     var col = [c565(c0), c565(c1)];
     var bits = (src[off+4])|(src[off+5]<<8)|(src[off+6]<<16)|(src[off+7]<<24);
+    var four = (force4 === true) || (c0 > c1);
     for (var y=0;y<4;y++) for(var x=0;x<4;x++) {
       var idx=(bits>>(2*(y*4+x)))&3, p=(y*4+x)*4;
-      if (c0>c1) {
+      if (four) {
         if (idx<2) { dst[p]=col[idx][0];dst[p+1]=col[idx][1];dst[p+2]=col[idx][2];dst[p+3]=255; }
         else if (idx<3) { dst[p]=(2*col[0][0]+col[1][0])/3;dst[p+1]=(2*col[0][1]+col[1][1])/3;dst[p+2]=(2*col[0][2]+col[1][2])/3;dst[p+3]=255; }
         else { dst[p]=(col[0][0]+2*col[1][0])/3;dst[p+1]=(col[0][1]+2*col[1][1])/3;dst[p+2]=(col[0][2]+2*col[1][2])/3;dst[p+3]=255; }
@@ -262,8 +264,7 @@
   }
 
   // ---- 3-bit BC4/BC5 index reader ----
-  // 48 位索引跨 bLo/bHi 32 位边界：起始位 bp=30/31 的索引组必须并上 bHi 高位，
-  // 否则该像素误读低 2 位（如全 1 索引 0b111 被读成 0b11=3）→ 每块中心出黑点
+  // 索引跨 32 位边界：起始位 30/31 的组要并上 bHi 高位
   function bcIdx3(bLo, bHi, bp) {
     if (bp >= 32) return (bHi >>> (bp - 32)) & 7;
     if (bp >= 30) return ((bLo >>> bp) | (bHi << (32 - bp))) & 7;
@@ -312,7 +313,7 @@
       if(idx===0) v=f0; else if(idx===1) v=f1;
       else if(r0>r1) v=(f0*(8-idx)+f1*(idx-1))/7;
       else if(idx===6) v=-1.0; else if(idx===7) v=1.0;
-      else v=(f0*(5-idx)+f1*(idx-1))/5;
+      else v=(f0*(6-idx)+f1*(idx-1))/5;
       var vv=(v+1.0)*127.5; dst[p]=vv;dst[p+1]=vv;dst[p+2]=vv;dst[p+3]=255;
     }
   }
@@ -329,7 +330,7 @@
       if(idx===0) v=f0; else if(idx===1) v=f1;
       else if(r0>r1) v=(f0*(8-idx)+f1*(idx-1))/7;
       else if(idx===6) v=-1.0; else if(idx===7) v=1.0;
-      else v=(f0*(5-idx)+f1*(idx-1))/5;
+      else v=(f0*(6-idx)+f1*(idx-1))/5;
       dst[p+ch]=(v+1.0)*127.5;
     }
   }
@@ -338,13 +339,19 @@
   function bc5SBlock(src, off, dst) { bc4SChan(src, off, dst, 0); bc4SChan(src, off+8, dst, 1); }
 
   // ---- Dispatch BC1-BC5 software decode ----
+  // 按 type 前缀分派，TYPELESS/SRGB 变体自动落到同名 typed 解码器
   function decodeBC(data, w, h, fmt, step) {
     step = step || 1;
     var outW = Math.ceil(w / step), outH = Math.ceil(h / step);
     var out = new Uint8ClampedArray(outW * outH * 4);
     var nbw = Math.max(1,(w+3)/4|0), nbh = Math.max(1,(h+3)/4|0);
-    var fc = fmt.fourCC, dx = fmt.dxgi;
-    var bs = (fc==='DXT1'||dx===70||dx===71||dx===72||fc==='ATI1'||fc==='BC4U'||fc==='BC4S'||dx===80||dx===81?8:16);
+    // type 缺失时回退 DXGI_MAP（保住 SNORM 语义），最后退回 family
+    var type = fmt.type || DXGI_MAP[fmt.dxgi] || fmt.family || '';
+    var fam = type.slice(0,3);
+    if (fam!=='BC1'&&fam!=='BC2'&&fam!=='BC3'&&fam!=='BC4'&&fam!=='BC5')
+      throw new Error('decodeBC: unsupported compressed format "' + (type||fmt.family||'?') + '"');
+    var snorm = type.indexOf('_SNORM') >= 0;
+    var bs = (fam==='BC1'||fam==='BC4') ? 8 : 16;
     for (var by=0;by<nbh;by++) {
       // Skip block row if no step-aligned pixel in its Y range
       if (step > 1) {
@@ -360,14 +367,15 @@
         }
         var bo = (by*nbw+bx)*bs;
         var block = new Uint8Array(64);
-        if (fc==='DXT1'||dx===70||dx===71||dx===72) bc1Block(data, bo, block);
-        else if (fc==='DXT5'||dx===77||dx===78) { bc1Block(data, bo+8, block); bc4Chan(data, bo, block, 3); }
-        else if (fc==='DXT3'||dx===74||dx===75) { for(var i=0;i<16;i++) block[i*4+3]=((data[bo+(i>>1)]>>((i&1)*4))&15)*17; bc1Block(data, bo+8, block); }
-        else if (fc==='ATI1'||fc==='BC4U'||dx===80) bc4Block(data, bo, block);
-        else if (fc==='BC4S'||dx===81) bc4SBlock(data, bo, block);
-        else if (fc==='ATI2'||fc==='BC5U'||dx===83) bc5Block(data, bo, block);
-        else if (fc==='BC5S'||dx===84) bc5SBlock(data, bo, block);
-        if (!(fc==='DXT3'||fc==='DXT5'||dx===74||dx===75||dx===77||dx===78)) { for(var i=3;i<64;i+=4) block[i]=255; }
+        // 先铺 A=255；末尾无条件覆写曾抹掉 BC1 透明与 BC2/BC3 alpha
+        for (var ai=3;ai<64;ai+=4) block[ai]=255;
+        if (fam==='BC1') bc1Block(data, bo, block, false);
+        // BC2 颜色恒 4 色，显式 alpha 必须后写
+        else if (fam==='BC2') { bc1Block(data, bo+8, block, true); for(var i=0;i<16;i++) block[i*4+3]=((data[bo+(i>>1)]>>((i&1)*4))&15)*17; }
+        // BC3 alpha 块后写（bc4Chan 覆写 A）
+        else if (fam==='BC3') { bc1Block(data, bo+8, block, true); bc4Chan(data, bo, block, 3); }
+        else if (fam==='BC4') { if (snorm) bc4SBlock(data, bo, block); else bc4Block(data, bo, block); }
+        else if (fam==='BC5') { if (snorm) bc5SBlock(data, bo, block); else bc5Block(data, bo, block); }
         for (var py=0;py<4;py++) {
           var gy=by*4+py;
           if(gy>=h) continue;

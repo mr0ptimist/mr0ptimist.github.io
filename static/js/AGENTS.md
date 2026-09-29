@@ -7,9 +7,10 @@
 | 文件 | 加载方式 | 用途 |
 |------|---------|------|
 | `worker-shared.js` | `<script>` / `importScripts()` | 公共工具：二进制读取、half-float、DXGI 表、BC1-5 解码、格式检测。暴露 `self.ImageCodecShared`。 |
-| `dds-parser.js` | `<script>`（依赖 worker-shared） | DDS 解析器。mip/array/cubemap 解析、BC6H/BC7 走 WebGL 硬件解码（需要 `document`）。暴露 `window.DDS`。 |
+| `dds-codec.js` | `<script>` / `importScripts()` | DDS 容器解析 + CPU 解码入口（`parse` / `decodeCPU` / `mipSize`），主线程与 Worker 共用。暴露 `self.ImageCodecDDS`。 |
+| `dds-parser.js` | `<script>`（依赖 worker-shared + dds-codec） | DDS 查看器封装：mip/array/cubemap 取帧、BC6H/BC7 走 WebGL 硬件解码（需要 `document`）。暴露 `window.DDS`。 |
 | `exr-parser.js` | `<script>` 或 `importScripts()` | OpenEXR 解析器（仅 uncompressed）。主线程和 Worker 复用同一文件。暴露 `window.EXR`。 |
-| `decode-worker.js` | `new Worker(url)` | Web Worker。通过 `importScripts()` 加载 worker-shared + exr-parser。处理 DDS（BC1-5 + 未压缩）和 EXR。BC6H/BC7 返回失败。 |
+| `decode-worker.js` | `new Worker(url)` | Web Worker。通过 `importScripts()` 加载 worker-shared + dds-codec + exr-parser。处理 DDS（BC1-5 + 未压缩）和 EXR。BC6H/BC7 返回失败。 |
 | `image-viewer.js` | `<script>`（最后加载） | UI 入口：channel viewer、pixel inspector、mip/array slider、lazy load、缓存管理。 |
 | `gpu-graph.js` | `<script>`（按需，有 GPU 图页面） | GPU 帧调用图可视化（vis-network）。`GpuGraph.init(...)` |
 | `sort-bar.js` | `<script>`（列表页） | 文章列表排序：树形/平铺双模式。通过 `window.SortBarConfig` 配置。 |
@@ -21,10 +22,11 @@
 
 **始终加载**（`extend_footer.html`）：
 1. `worker-shared.js` → 定义 `ImageCodecShared`
-2. `dds-parser.js` → 定义 `DDS`
-3. `exr-parser.js` → 定义 `EXR`
-4. `color-remap.js` → 颜色重映射
-5. `image-viewer.js` → 初始化全部 UI 逻辑
+2. `dds-codec.js` → 定义 `ImageCodecDDS`
+3. `dds-parser.js` → 定义 `DDS`
+4. `exr-parser.js` → 定义 `EXR`
+5. `color-remap.js` → 颜色重映射
+6. `image-viewer.js` → 初始化全部 UI 逻辑
 
 **按需加载**（`extend_head.html`）：
 - `gpu-graph.js` → 页面有 {{< gpugraph >}} 时
@@ -38,6 +40,8 @@
 
 - **不引入 bundler**，不改成 ES module。保持 classic script + `importScripts()`。
 - **BC6H/BC7 不解码进 Worker**，依赖 WebGL context，留在主线程 `dds-parser.js`。
+- **WebGL 回读不要翻转行序**：顶点着色器 `t = p*0.5+0.5` 已把纹理第 0 行放在视口第 0 行，`readPixels` 回读第 0 行就是图像第 0 行（top-down）。再加一次行翻转 = 上下颠倒（BC7/BC6H 曾因此整图翻转）。BC6H 是浮点格式，回读要走 `RGBA32F` + `EXT_color_buffer_float` + `readPixels(...,gl.FLOAT,...)`，否则 HDR 值被裁到 0-1。
+- **翻转只在明确要求时生效**：默认不翻转；只有 JSON sidecar 的 `flip_y`（或用户点翻转按钮）才翻转。
 - **DX10 uncompressed 格式必须从 `DXGI_BPP` 表设置 `bpp`**，漏设会导致像素读取偏移错误。
 - **`public/js/` 是 Hugo 构建输出**，不手动编辑。源码只维护 `static/js/`。
 - **Worker URL** 从 `image-viewer.js` 的 `<script src>` 推导，避免硬编码 `/js/...` 路径。
@@ -45,10 +49,12 @@
 
 ## ⚠️ Worker 缓存陷阱
 
-修改 `worker-shared.js` 或 `decode-worker.js` 后，浏览器会强缓存旧版本（`importScripts()` 不随 Hugo 重启刷新）。**必须同时做两件事**：
+修改 `worker-shared.js`、`dds-codec.js` 或 `decode-worker.js` 后，浏览器会强缓存旧版本（`importScripts()` 不随 Hugo 重启刷新）。**必须同时做两件事**：
 
 1. 更新 `image-viewer.js` 中 worker URL 的 `?v=N` 参数（+1）
 2. 更新 `decode-worker.js` 中 `importScripts(...)` 的 `?v=N` 参数（+1）
+
+新增进 `importScripts` 的文件（如 `dds-codec.js`）自身也带 `?v=N`，改动该文件时一并 +1。
 
 然后让用户 `Ctrl+Shift+R` 硬刷新。漏掉任何一步，改动不会生效。
 
@@ -79,7 +85,7 @@ html2canvas 版本记录在 `static/vendor/AGENTS.md`；升级后需重跑 CDP �
 
 ## ⚠️ 缩略图缓存（image-viewer.js）
 
-列表页的 DDS/EXR 缩略图解码后缩到 ≤200px，存进 Cache Storage **`blog-thumb-v1`**（键 = 图片 URL，值 = WebP 小图 blob）。
+列表页的 DDS/EXR 缩略图解码后缩到 ≤200px，存进 Cache Storage **`blog-thumb-v2`**（键 = 图片 URL，值 = WebP 小图 blob）。
 刷新时命中缓存 → **不下载、不解码**（16 张 33MB DDS 的 `/local/` 从 ~11s 降到即时）。
 
 - **重新导出同名 DDS 后旧缩略图不会自动失效**：升 `image-viewer.js` 顶部的 `THUMB_CACHE` 版本号即可让旧缓存全部作废。
