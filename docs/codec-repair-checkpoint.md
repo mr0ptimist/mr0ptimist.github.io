@@ -1,5 +1,7 @@
 # DDS/EXR repair — completed acceptance
 
+Reusable methodology and commands: [DDS/EXR 编解码器怎么验收](codec-testing-method.md). The independent harnesses are preserved in `scripts/codec-tests/`; the temporary paths below identify the original run artifacts.
+
 The user resumed the checkpoint `51fdeda` on 2026-09-29. The identified fixes and their integration are complete. This supersedes the unfinished status recorded in that commit.
 
 ## Final structure and behavior
