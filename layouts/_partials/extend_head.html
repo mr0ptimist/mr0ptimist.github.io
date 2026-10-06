@@ -7,6 +7,7 @@
 <script src="{{ "js/gpu-graph.js" | relURL }}"></script>
 {{- end }}
 
+{{- $content := .Page.Content -}}
 {{- if .Page.Store.Get "hasMermaid" }}
 <script src="{{ "vendor/mermaid.min.js" | relURL }}"></script>
 <script src="{{ "js/mermaid-init.js" | relURL }}?v=23"></script>
