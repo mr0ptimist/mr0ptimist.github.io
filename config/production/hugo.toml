@@ -1,10 +1,10 @@
 # Production-only config: ignore local-only content when building for deploy
-ignoreFiles = ["local/"]
+ignoreFiles = ["local/", "protect/"]
 
 [params]
   mainSections = ['posts']
 
-# Override menus: remove "本地" nav item for production
+# Override menus: keep only public sections for production
 [[menus.main]]
   identifier = 'home'
   name = '首页'

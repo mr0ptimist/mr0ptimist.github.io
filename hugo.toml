@@ -19,7 +19,7 @@ buildFuture = true
   ShowToc = true
   TocOpen = true
 
-  mainSections = ['posts', 'local']
+  mainSections = ['posts', 'protect', 'local']
 
   [params.profileMode]
     enabled = true
@@ -72,3 +72,8 @@ buildFuture = true
     name = '本地'
     url = '/local/'
     weight = 25
+  [[menus.main]]
+    identifier = 'protect'
+    name = '私有'
+    url = '/protect/'
+    weight = 23

@@ -60,7 +60,7 @@
 {{- partial "home_info.html" . }}
 {{- end }}
 
-{{- $isPostsSection := and (eq .Kind "section") (eq .Type "posts") -}}
+{{- $isPostsSection := and (eq .Kind "section") (in (slice "posts" "protect") .Type) -}}
 
 {{- if $isPostsSection }}
   {{- /* ── Tree view for /posts/ ── */ -}}
