@@ -6,6 +6,7 @@ __pycache__/
 *.pyc
 content/local/
 content/protect/
+content/posts/Endfield/Lighting_d3d11_frameunknown_gpt-6/
 content/PRIVATE.md
 config/development/
 .idea/

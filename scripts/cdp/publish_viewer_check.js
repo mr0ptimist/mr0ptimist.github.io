@@ -3,9 +3,80 @@ const assert = require('assert/strict');
 const { openPage, sleep } = require('./cdp.js');
 
 (async function() {
-  const buttonMode = process.argv[3] === '--button';
+  const destinationMode = process.argv[3] === '--destinations';
+  const buttonMode = process.argv[3] === '--button' || destinationMode;
   const page = await openPage(process.argv[2], { waitSelector: buttonMode ? '#publish-local-btn' : '.channel-container' });
   try {
+    if (process.argv.includes('--draft-dialog')) {
+      const draft = await page.evaluate(`(async function() {
+        for (var i = 0; i < 100 && !document.querySelector('button.draft-status-button'); i++)
+          await new Promise(resolve => setTimeout(resolve, 20));
+        var button = document.querySelector('button.draft-status-button');
+        if (!button) return { button: false };
+        button.click();
+        var dialog = document.querySelector('.draft-status-dialog');
+        var result = { button: true, open: dialog.open, title: dialog.querySelector('h2').textContent,
+          article: dialog.querySelector('.draft-article-title').textContent,
+          source: document.querySelector('script[src*="draft-status.js"]').dataset.article };
+        dialog.querySelector('.draft-cancel').click();
+        result.closed = !dialog.open;
+        return result;
+      })()`);
+      assert.equal(draft.button, true);
+      assert.equal(draft.open, true);
+      assert.equal(draft.closed, true);
+      assert.equal(draft.title, '移除草稿标记？');
+      assert.ok(draft.article.length > 0);
+      assert.ok(draft.source.startsWith('content/local/'));
+    }
+    if (destinationMode) {
+      const state = await page.evaluate(`(async function() {
+        document.getElementById('publish-local-btn').click();
+        for (var i = 0; i < 100 && document.getElementById('lp-confirm').disabled; i++)
+          await new Promise(resolve => setTimeout(resolve, 20));
+        var button = document.getElementById('publish-local-btn');
+        var selector = document.getElementById('lp-destination');
+        var publicSize = document.getElementById('lp-existing').textContent;
+        selector.value = 'protect'; selector.dispatchEvent(new Event('change'));
+        return { destination: selector.value, path: document.getElementById('lp-path').textContent,
+          publicBytes: Number(button.dataset.publishExistingBytes), protectBytes: Number(button.dataset.publishProtectExistingBytes),
+          publicSize: publicSize, protectSize: document.getElementById('lp-existing').textContent,
+          ready: !document.getElementById('lp-confirm').disabled,
+          publicLink: document.getElementById('counterpart-article-btn').href,
+          protectLink: document.getElementById('protect-counterpart-article-btn').href };
+      })()`);
+      assert.equal(state.destination, 'protect');
+      assert.ok(state.path.includes('/content/protect/'));
+      assert.equal(state.ready, true);
+      assert.equal(state.publicBytes, Number(process.argv[4]));
+      assert.equal(state.protectBytes, Number(process.argv[5]));
+      assert.match(state.publicSize, /^\d+(\.\d+)? (B|KiB|MiB|GiB)$/);
+      assert.match(state.protectSize, /^\d+(\.\d+)? (B|KiB|MiB|GiB)$/);
+      assert.ok(new URL(state.publicLink).pathname.startsWith('/posts/'));
+      assert.ok(new URL(state.protectLink).pathname.startsWith('/protect/'));
+      await page.evaluate("document.getElementById('lp-cancel').click(); document.getElementById('protect-counterpart-article-btn').click()");
+      let local;
+      for (let i = 0; i < 60; i++) {
+        await sleep(100);
+        local = await page.evaluate(`(function() {
+          var button = document.getElementById('counterpart-article-btn');
+          return button && { label: button.title, href: button.href, url: location.href };
+        })()`);
+        if (local && local.label === '打开本地版') break;
+      }
+      assert.equal(local.label, '打开本地版');
+      assert.equal(local.url, state.protectLink);
+      assert.equal(local.href, process.argv[2]);
+      await page.evaluate("document.getElementById('counterpart-article-btn').click()");
+      let restored = false;
+      for (let i = 0; i < 60 && !restored; i++) {
+        await sleep(100);
+        restored = await page.evaluate("!!document.getElementById('protect-counterpart-article-btn') && location.href === " + JSON.stringify(process.argv[2]));
+      }
+      assert.equal(restored, true);
+      console.log(JSON.stringify(state));
+      return;
+    }
     if (buttonMode) {
       const result = await page.evaluate(`(async function() {
         var opened = '';

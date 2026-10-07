@@ -62,6 +62,37 @@ class LocalPublishServerTests(unittest.TestCase):
             time.sleep(0.05)
         self.fail("发布任务未结束")
 
+    def test_remove_draft_preserves_other_front_matter_and_body(self):
+        article = self.fixture.source / "index.md"
+        original = '+++\r\ntitle = "测试" # title comment\r\ndraft = true # draft comment\r\n[params]\r\ndraft = true\r\n+++\r\n正文\r\n'
+        article.write_bytes(original.encode("utf-8"))
+        status, result, _ = self.request("/remove-draft", "POST", {"article": str(article)})
+        self.assertEqual(status, 200, result)
+        self.assertEqual(article.read_bytes(), original.replace('draft = true # draft comment\r\n', '').encode("utf-8"))
+        before = article.read_bytes()
+        self.assertEqual(self.request("/remove-draft", "POST", {"article": str(article)})[0], 200)
+        self.assertEqual(article.read_bytes(), before)
+
+    def test_remove_draft_accepts_protect_and_rejects_outside_paths_and_missing_auth(self):
+        article = self.fixture.root / "content/protect/group/post/index.md"
+        article.parent.mkdir(parents=True)
+        article.write_text('+++\ntitle = "私有"\ndraft = true\n+++\n内容\n', encoding="utf-8")
+        body = {"article": str(article)}
+        self.assertEqual(self.request("/remove-draft", "POST", body, {"X-GithubIO-Publish-Token": ""})[0], 403)
+        self.assertEqual(self.request("/remove-draft", "POST", body)[0], 200)
+        outside = self.fixture.root / "outside.md"
+        outside.write_text('+++\ndraft = true\n+++\n', encoding="utf-8")
+        before = outside.read_bytes()
+        self.assertEqual(self.request("/remove-draft", "POST", {"article": str(outside)})[0], 400)
+        self.assertEqual(outside.read_bytes(), before)
+
+    def test_remove_draft_refuses_changes_during_publication(self):
+        article = self.fixture.source / "index.md"
+        before = article.read_bytes()
+        self.server.active = "running-job"
+        self.assertEqual(self.request("/remove-draft", "POST", {"article": str(article)})[0], 409)
+        self.assertEqual(article.read_bytes(), before)
+
     def test_confirmation_generates_and_replaces_bundle_with_observable_result(self):
         before = self.fixture.hashes()
         job = self.publish()

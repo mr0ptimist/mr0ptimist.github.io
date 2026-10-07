@@ -17,8 +17,9 @@
 | `mermaid-init.js` | `<script>`（按需，有 Mermaid 页面） | Mermaid 图表渲染：初始化配置、`<<interface>>` 修复、Dark Reader 防护。 |
 | `color-remap.js` | `<script>` | 颜色通道重映射工具。 |
 | `published-texture.js` | `<script>`（image-viewer 之前） | 发布器 RGB8/灰度 Alpha PNG 解码与 RGBA 组装，兼容旧 RGBA8 PNG，保留独立 RGB/A。暴露 `window.PublishedTexture`。 |
-| `publish-local.js` | `<script>`（仅开发预览 local 文章，header.html） | 发布配置面板：读取贴图头预估图数与体积，通过本机 HTTP 服务生成公开副本；显示逐张完成数量、文件名、进度条及任务结果；流程和验证见 [发布说明](../../scripts/README-publish-local.md)。 |
+| `publish-local.js` | `<script>`（仅开发预览 local 文章，header.html） | 生成配置面板：选择 public / protect，读取贴图头预估图数与体积，通过本机 HTTP 服务生成所选副本；显示逐张完成数量、文件名、进度条及任务结果；流程和验证见 [发布说明](../../scripts/README-publish-local.md)。 |
 | `page-shot.js` | `<script>`（仅 dev 配置文章页，header.html） | 「渲染页面为图片」：html2canvas 长图/整页/屏幕截图 + 选项弹窗。`?v=N` 版本号。 |
+| `draft-status.js` | `<script defer>`（仅本地预览草稿页，header.html） | 点击草稿标记弹窗确认，通过本机服务移除当前文章的 draft 字段。 |
 
 ## 加载顺序
 

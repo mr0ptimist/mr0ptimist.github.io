@@ -3,8 +3,13 @@
   if (!button) return;
   var overlay, stats, preparing, session, publishing = false;
   var path = button.getAttribute('data-publish-path');
-  var existingBytes = button.getAttribute('data-publish-existing-bytes');
-  var preview = new URL(button.getAttribute('data-publish-preview'), location.origin).href;
+  var destinations = {
+    public: { section: 'posts', label: '公开版', bytes: button.getAttribute('data-publish-existing-bytes'),
+      preview: button.getAttribute('data-publish-preview') },
+    protect: { section: 'protect', label: 'protect 版', bytes: button.getAttribute('data-publish-protect-existing-bytes'),
+      preview: button.getAttribute('data-publish-protect-preview') }
+  };
+  var preview;
   var service = new URL(button.getAttribute('data-publish-service') || 'http://127.0.0.1:1314', location.origin).href.replace(/\/$/, '');
   var pendingKey = 'local-publish:' + path.toLowerCase();
   var code = /\.(hlsl|glsl|usf|ush|ufh|shader|compute|cpp|c|cc|cxx|h|hpp|inl|cs|py|js|ts|metal|wgsl|spv|cso|dxil)$/i;
@@ -12,6 +17,22 @@
   function field(id) { return overlay.querySelector('#lp-' + id); }
   function size(bytes) {
     return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MiB' : (bytes / 1024).toFixed(1) + ' KiB';
+  }
+  function destinationLabel() { return destinations[field('destination').value].label; }
+  function selectDestination(feedback) {
+    var choice = field('destination').value, target = destinations[choice];
+    if (!target) { field('confirm').disabled = true; return; }
+    preview = new URL(target.preview, location.origin).href;
+    field('path').textContent = path.replace(/\/content\/local\//i, '/content/' + target.section + '/')
+      .replace(/\/index\.md$/i, '/').replace(/\.md$/i, '/');
+    field('existing-label').textContent = '已有' + target.label + '实际体积';
+    field('existing').textContent = target.bytes === null ? '尚未生成' : size(Number(target.bytes));
+    field('warning').textContent = '重新生成会完整替换选中的 content/' + target.section + '/ 文章文件夹，以 local 源为准。';
+    var supported = session && (Array.isArray(session.destinations) ? session.destinations.includes(choice) : choice === 'public');
+    field('confirm').disabled = publishing || !stats || !supported;
+    if (feedback && stats && !publishing) {
+      status(supported ? '配置就绪，确认后开始生成' + target.label + '。' : '当前发布服务不支持此目标，请重启本地预览启动器后重试。', false, !supported);
+    }
   }
   function close() { overlay.classList.remove('ps-open'); button.focus(); }
   function status(text, busy, error) {
@@ -47,7 +68,7 @@
       if (job.state === 'failed') throw new Error(job.error);
       if (job.state === 'succeeded') {
         var result = job.result;
-        status('已生成公开版：' + result.converted + ' 张贴图转 RGB PNG' + (result.alpha_images ? '，另存 ' + result.alpha_images + ' 张 Alpha 图' : '') + '，实际体积 ' + size(result.output_bytes) + '。正在打开公开版…', false);
+        status('已生成' + destinationLabel() + '：' + result.converted + ' 张贴图转 RGB PNG' + (result.alpha_images ? '，另存 ' + result.alpha_images + ' 张 Alpha 图' : '') + '，实际体积 ' + size(result.output_bytes) + '。正在打开文章…', false);
         var url = new URL(result.preview_url || preview, location.origin);
         preview = new URL(url.pathname + url.search + url.hash, location.origin).href;
         for (var attempt = 0; attempt < 20; attempt++) {
@@ -56,10 +77,10 @@
           await wait();
         }
         pending();
-        status('公开版已生成，页面仍在更新。可通过顶部“打开公开版”查看。', false);
+        status(destinationLabel() + '已生成，页面仍在更新。可通过顶部对应按钮查看。', false);
         return;
       }
-      status(job.message || '正在生成公开版…', true);
+      status(job.message || '正在生成' + destinationLabel() + '…', true);
       await wait();
     }
   }
@@ -160,8 +181,7 @@
       var headers = results[0]; session = results[1];
       stats = { textures: headers, copied: copied + 1024 };
       budget();
-      status('配置就绪，确认后开始生成公开版。', false);
-      field('confirm').disabled = publishing;
+      selectDestination(true);
     } catch (error) {
       field('budget').textContent = '暂时无法预估';
       status(error.message + '；请确认本地预览启动器已启动发布服务，关闭后重试。', false, true);
@@ -172,26 +192,29 @@
     overlay.id = 'publish-local-overlay';
     overlay.className = 'ps-overlay lp-overlay';
     overlay.innerHTML = '<section class="ps-card" role="dialog" aria-modal="true" aria-labelledby="lp-title">' +
-      '<div class="ps-head"><span id="lp-title">发布公开文章</span><button id="lp-close" class="ps-close" aria-label="关闭">✕</button></div>' +
-      '<div class="ps-body"><div class="ps-row"><span class="ps-label">生成到</span><div id="lp-path" class="lp-path"></div></div>' +
+      '<div class="ps-head"><span id="lp-title">生成文章副本</span><button id="lp-close" class="ps-close" aria-label="关闭">✕</button></div>' +
+      '<div class="ps-body"><div class="ps-row"><label class="ps-label" for="lp-destination">生成目标</label>' +
+      '<select id="lp-destination"><option value="public">public（随公开博客发布）</option><option value="protect">protect（不随公开博客发布）</option></select></div>' +
+      '<div class="ps-row"><span class="ps-label">生成到</span><div id="lp-path" class="lp-path"></div></div>' +
       '<div class="ps-row"><label class="ps-label" for="lp-max-edge">DDS / EXR 转 PNG · 贴图尺寸</label>' +
       '<select id="lp-max-edge"><option value="0">原尺寸（默认）</option><option value="2048">最长边 2048</option><option value="1024">最长边 1024</option></select>' +
       '<p class="ps-hint">保持宽高比，小图不放大。导出 mip 0 / slice 0；PNG 默认显示完整 RGB，Alpha 单独保存供通道查看。已有 PNG、JPG 等图片原样保留。</p></div>' +
       '<div class="lp-stats"><div class="lp-stat"><span class="ps-label">文章图片</span><strong id="lp-images">统计中…</strong></div>' +
       '<div class="lp-stat"><span class="ps-label">引用资源原始体积</span><strong id="lp-source">统计中…</strong></div>' +
-      '<div class="lp-stat"><span class="ps-label">已有公开版实际体积</span><strong id="lp-existing"></strong></div>' +
+      '<div class="lp-stat"><span id="lp-existing-label" class="ps-label"></span><strong id="lp-existing"></strong></div>' +
       '<div class="lp-stat"><span class="ps-label">省略代码文件，保留 sidecar</span><strong id="lp-code">统计中…</strong></div></div>' +
-      '<p class="ps-hint">未压缩数据量（上限参考）：<span id="lp-budget">计算中…</span>。按 RGB+Alpha 最多 4 字节/像素，加附件和少量余量计算，未考虑 PNG 压缩。已有公开版体积仅供参考，本次实际体积会在生成完成后统计。</p>' +
-      '<div class="lp-warning">重新发布会完整替换对应的 content/posts/ 文章文件夹，以 local 源为准。</div></div>' +
+      '<p class="ps-hint">未压缩数据量（上限参考）：<span id="lp-budget">计算中…</span>。按 RGB+Alpha 最多 4 字节/像素，加附件和少量余量计算，未考虑 PNG 压缩。已有目标版本体积仅供参考，本次实际体积会在生成完成后统计。</p>' +
+      '<div id="lp-warning" class="lp-warning"></div></div>' +
       '<div id="lp-status" class="ps-status" role="status" aria-live="polite"><span class="ps-spin"></span><span id="lp-status-text"></span>' +
       '<progress id="lp-progress" class="lp-progress" max="1" value="0" aria-label="贴图导出进度" hidden></progress></div>' +
-      '<div class="ps-foot"><button id="lp-cancel" class="ps-btn">取消</button><button id="lp-confirm" class="ps-btn primary" disabled>确认发布</button></div></section>';
+      '<div class="ps-foot"><button id="lp-cancel" class="ps-btn">取消</button><button id="lp-confirm" class="ps-btn primary" disabled>确认生成</button></div></section>';
     document.body.appendChild(overlay);
-    field('existing').textContent = existingBytes === null ? '尚未生成' : size(Number(existingBytes));
-    field('path').textContent = path.replace(/\/content\/local\//i, '/content/posts/').replace(/\/index\.md$/i, '/').replace(/\.md$/i, '/');
+    field('destination').value = 'public';
+    selectDestination(false);
     field('close').addEventListener('click', close);
     field('cancel').addEventListener('click', close);
     field('max-edge').addEventListener('change', budget);
+    field('destination').addEventListener('change', function() { selectDestination(true); });
     overlay.addEventListener('click', function(event) { if (event.target === overlay) close(); });
     document.addEventListener('keydown', function(event) { if (event.key === 'Escape' && overlay.classList.contains('ps-open')) close(); });
     field('confirm').addEventListener('click', async function() {
@@ -199,11 +222,13 @@
       publishing = true;
       field('confirm').disabled = true;
       field('max-edge').disabled = true;
+      field('destination').disabled = true;
       status('正在提交发布任务…', true);
       try {
         var edge = Number(field('max-edge').value);
-        var job = await request('/publish', 'POST', { article: path, max_edge: edge });
-        pending({ id: job.id, edge: edge });
+        var destination = field('destination').value;
+        var job = await request('/publish', 'POST', { article: path, max_edge: edge, destination: destination });
+        pending({ id: job.id, edge: edge, destination: destination });
         console.info('[local-publish] 发布任务已接收', job.id);
         await watch(job.id);
       } catch (error) {
@@ -212,8 +237,9 @@
         console.error('[local-publish]', error);
       } finally {
         publishing = false;
-        field('confirm').disabled = false;
         field('max-edge').disabled = false;
+        field('destination').disabled = false;
+        selectDestination(false);
       }
     });
   }
@@ -228,10 +254,12 @@
     var saved = JSON.parse(window.sessionStorage.getItem(pendingKey));
     if (saved) {
       create(); overlay.classList.add('ps-open'); field('max-edge').value = String(saved.edge);
-      publishing = true; field('max-edge').disabled = true;
+      field('destination').value = saved.destination || 'public';
+      selectDestination(false);
+      publishing = true; field('max-edge').disabled = true; field('destination').disabled = true;
       prepare().then(function() { if (!session) throw new Error('无法连接本地发布服务'); return watch(saved.id); })
         .catch(function(error) { pending(); status('生成失败：' + error.message, false, true); })
-        .finally(function() { publishing = false; field('confirm').disabled = false; field('max-edge').disabled = false; });
+        .finally(function() { publishing = false; field('max-edge').disabled = false; field('destination').disabled = false; selectDestination(false); });
     }
   } catch (error) {}
 })();

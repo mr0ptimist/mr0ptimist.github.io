@@ -2,8 +2,10 @@ import argparse
 import json
 import logging
 import os
+import re
 import secrets
 import subprocess
+import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,7 +15,38 @@ from urllib.error import URLError
 from urllib.parse import urlsplit
 from urllib.request import urlopen
 
-from publish_local_post import no_redirect, publish
+import tomlkit
+
+from publish_local_post import DESTINATIONS, no_redirect, publish
+
+
+def remove_draft(root, article):
+    content = root / "content"
+    no_redirect(article, content)
+    if article.relative_to(content).parts[0] not in {"local", "posts", "protect"} or article.name != "index.md" or not article.is_file():
+        raise ValueError("只能修改 local、posts 或 protect 中的文章 index.md")
+    original = article.read_bytes()
+    text = original.decode("utf-8")
+    match = re.match(r"\A(\ufeff?\+\+\+[ \t]*\r?\n)(.*?)(^\+\+\+[ \t]*(?:\r?\n|$))", text, re.DOTALL | re.MULTILINE)
+    if not match:
+        raise ValueError("文章必须使用 TOML front matter")
+    front = tomlkit.parse(match[2])
+    if front.get("draft") is not True:
+        return {"draft": False, "changed": False}
+    del front["draft"]
+    updated = (match[1] + tomlkit.dumps(front) + match[3] + text[match.end():]).encode("utf-8")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=article.parent, prefix=".draft-", suffix=".tmp", delete=False) as handle:
+            temporary = Path(handle.name)
+            handle.write(updated)
+        if article.read_bytes() != original:
+            raise ValueError("文章已被其他程序修改，请刷新后重试")
+        os.replace(temporary, article)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return {"draft": False, "changed": True}
 
 
 class PublishServer(ThreadingHTTPServer):
@@ -40,8 +73,9 @@ class PublishServer(ThreadingHTTPServer):
         super().__init__(address, PublishHandler)
         self.logger.info("server ready root=%s port=%s", self.root, self.server_port)
 
-    def generate(self, job_id, article, max_edge):
-        self.logger.info("publish start id=%s article=%s max_edge=%s", job_id, article, max_edge)
+    def generate(self, job_id, article, max_edge, destination):
+        self.logger.info("publish start id=%s article=%s max_edge=%s destination=%s",
+                         job_id, article, max_edge, destination)
         def progress(value):
             count = f"{value['completed']} / {value['total']} 张"
             message = f"已完成 {count}：{value['file']}" if value["file"] else f"正在转换贴图：{count}"
@@ -53,13 +87,13 @@ class PublishServer(ThreadingHTTPServer):
                 self.logger.info("texture done id=%s completed=%s total=%s file=%s", job_id,
                                  value["completed"], value["total"], value["file"])
         try:
-            plan = publish(article, dry_run=True, max_edge=max_edge)
+            plan = publish(article, dry_run=True, max_edge=max_edge, destination=destination)
             progress({"phase": "textures", "completed": 0, "total": plan["converted"], "file": ""})
-            result = publish(article, max_edge=max_edge, progress=progress)
+            result = publish(article, max_edge=max_edge, progress=progress, destination=destination)
             with self.lock:
                 self.jobs[job_id].update(state="succeeded", result=result)
-            self.logger.info("publish success id=%s target=%s converted=%s bytes=%s", job_id,
-                             result["target"], result["converted"], result["output_bytes"])
+            self.logger.info("publish success id=%s destination=%s target=%s converted=%s bytes=%s", job_id,
+                             destination, result["target"], result["converted"], result["output_bytes"])
         except Exception as error:
             with self.lock:
                 self.jobs[job_id].update(state="failed", error=str(error))
@@ -120,10 +154,10 @@ class PublishHandler(BaseHTTPRequestHandler):
                 with self.server.lock:
                     busy = self.server.active is not None
                 self.reply(200, {"service": "GithubIO.local-publish", "root": str(self.server.root), "pid": os.getpid(),
-                                 "texture_progress": True, "busy": busy})
+                                 "texture_progress": True, "busy": busy, "destinations": list(DESTINATIONS)})
         elif route == "/session":
             if self.authorized(token=False):
-                self.reply(200, {"token": self.server.token})
+                self.reply(200, {"token": self.server.token, "destinations": list(DESTINATIONS), "remove_draft": True})
         elif route.startswith("/jobs/"):
             if not self.authorized():
                 return
@@ -137,7 +171,8 @@ class PublishHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.authorized():
             return
-        if urlsplit(self.path).path != "/publish":
+        route = urlsplit(self.path).path
+        if route not in {"/publish", "/remove-draft"}:
             self.reply(404, {"error": "未知发布接口"})
             return
         try:
@@ -147,9 +182,24 @@ class PublishHandler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict) or not isinstance(data.get("article"), str):
                 raise ValueError("发布请求缺少文章路径")
+            if route == "/remove-draft":
+                article = Path(data["article"])
+                if not article.is_absolute():
+                    article = self.server.root / article
+                with self.server.lock:
+                    if self.server.active:
+                        self.reply(409, {"error": "正在生成文章，请等待完成后再移除草稿"})
+                        return
+                    result = remove_draft(self.server.root, article)
+                self.server.logger.info("remove draft article=%s changed=%s", article, result["changed"])
+                self.reply(200, result)
+                return
             edge = data.get("max_edge", 0)
             if type(edge) is not int or edge not in {0, 1024, 2048}:
                 raise ValueError("贴图尺寸请选择原尺寸、2048 或 1024")
+            destination = data.get("destination", "public")
+            if not isinstance(destination, str) or destination not in DESTINATIONS:
+                raise ValueError("发布目标必须是 public 或 protect")
             article = Path(data["article"])
             if not article.is_absolute():
                 article = self.server.root / article
@@ -163,9 +213,10 @@ class PublishHandler(BaseHTTPRequestHandler):
                 if len(self.server.jobs) >= 20:
                     del self.server.jobs[next(iter(self.server.jobs))]
                 job_id = secrets.token_hex(16)
-                self.server.jobs[job_id] = {"id": job_id, "state": "running", "message": "正在读取 local 源并准备生成…"}
+                self.server.jobs[job_id] = {"id": job_id, "state": "running", "destination": destination,
+                                            "message": "正在读取 local 源并准备生成…"}
                 self.server.active = job_id
-            self.server.workers.submit(self.server.generate, job_id, article, edge)
+            self.server.workers.submit(self.server.generate, job_id, article, edge, destination)
             self.reply(202, {"id": job_id, "state": "running"})
         except (ValueError, OSError) as error:
             self.reply(400, {"error": str(error)})

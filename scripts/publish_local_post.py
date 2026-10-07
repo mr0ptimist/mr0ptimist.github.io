@@ -24,6 +24,7 @@ IMAGES = TEXTURES | {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp", "
 CODE_FILES = {".hlsl", ".glsl", ".usf", ".ush", ".ufh", ".shader", ".compute", ".cpp", ".c", ".cc",
               ".cxx", ".h", ".hpp", ".inl", ".cs", ".py", ".js", ".ts", ".metal", ".wgsl", ".spv", ".cso", ".dxil"}
 ATTACHMENTS = {".json", ".md", ".txt", ".html", ".csv", ".css"}
+DESTINATIONS = {"public": "posts", "protect": "protect"}
 CODE_TEXT = re.compile(r"(?ms)(^[ \t]{0,3}(`{3,}|~{3,})[^\n]*\n.*?^[ \t]{0,3}\2[ \t]*$|`+[^`\n]*`+)")
 PAGE_REF = re.compile(r"{{[<%]\s*(?:rel)?ref\s+(['\"])(.*?)\1\s*[>%]}}")
 LINK = re.compile(r"(!?)\[([^\]\n]*)\]\((<[^>\n]+>|(?:\\.|[^()\n]|\([^()\n]*\))*)\)")
@@ -94,8 +95,9 @@ def split_article(text):
     return tomlkit.parse(match.group(1)), text[match.end():]
 
 
-def preview_url(root, target, front, relative):
-    fallback = str(front.get("url") or "/posts/" + relative.as_posix().lower().replace(" ", "-") + "/")
+def preview_url(root, target, front, relative, destination="public"):
+    fallback = str(front.get("url") or "/" + DESTINATIONS[destination] + "/"
+                   + relative.as_posix().lower().replace(" ", "-") + "/")
     try:
         result = subprocess.run(["hugo", "list", "all", "--environment", "development", "--noBuildLock"],
                                 cwd=root, capture_output=True, text=True, encoding="utf-8", timeout=30)
@@ -152,7 +154,9 @@ def convert_textures(manifest, bundle, progress):
                 process.wait()
 
 
-def publish(article, dry_run=False, max_edge=0, progress=None):
+def publish(article, dry_run=False, max_edge=0, progress=None, destination="public"):
+    if not isinstance(destination, str) or destination not in DESTINATIONS:
+        raise ValueError(f"发布目标必须是 public 或 protect，收到: {destination!r}")
     if not isinstance(max_edge, int) or not 0 <= max_edge <= 16384:
         raise ValueError("贴图最长边必须为 0（原尺寸）或 1–16384")
     article = Path(article).absolute()
@@ -163,7 +167,7 @@ def publish(article, dry_run=False, max_edge=0, progress=None):
         raise ValueError("无法从文章路径找到项目 hugo.toml")
     no_redirect(article, root / "content/local")
     root, article = root.resolve(), article.resolve()
-    local, posts = root / "content/local", root / "content/posts"
+    local, section = root / "content/local", root / "content" / DESTINATIONS[destination]
     no_redirect(article, local)
     if not article.is_file() or article.suffix.lower() != ".md" or article.name == "_index.md":
         raise ValueError("请指定 local 下的文章 Markdown 文件")
@@ -171,9 +175,9 @@ def publish(article, dry_run=False, max_edge=0, progress=None):
     relative = article.relative_to(local).parent if article.name == "index.md" else article.relative_to(local).with_suffix("")
     if not relative.parts:
         raise ValueError("不能把 local 根目录作为文章发布")
-    target = posts / relative
-    no_redirect(posts, root)
-    no_redirect(target, posts)
+    target = section / relative
+    no_redirect(section, root)
+    no_redirect(target, section)
     if target.exists() and not target.is_dir():
         raise ValueError(f"目标不是文章文件夹: {target}")
     context = bundle / "context.json"
@@ -313,9 +317,9 @@ def publish(article, dry_run=False, max_edge=0, progress=None):
     front["local_publication"] = True
     front["local_source"] = article.relative_to(root / "content").as_posix()
     if front.get("type") == "local":
-        front["type"] = "posts"
+        front["type"] = DESTINATIONS[destination]
     if str(front.get("url", "")).startswith("/local/"):
-        front["url"] = str(front["url"]).replace("/local/", "/posts/", 1)
+        front["url"] = str(front["url"]).replace("/local/", "/" + DESTINATIONS[destination] + "/", 1)
     if isinstance(front.get("cover"), dict) and front["cover"].get("image"):
         front["cover"]["image"] = reference(str(front["cover"]["image"]))
     texts = {}
@@ -335,12 +339,14 @@ def publish(article, dry_run=False, max_edge=0, progress=None):
     groups = []
     for length in range(1, len(relative.parts)):
         group = Path(*relative.parts[:length])
-        section = local / group / "_index.md"
-        if not (posts / group / "_index.md").exists():
-            no_redirect(posts / group / "_index.md", posts)
-            groups.append((section if section.is_file() else None, posts / group / "_index.md"))
+        source_section = local / group / "_index.md"
+        target_section = section / group / "_index.md"
+        if not target_section.exists():
+            no_redirect(target_section, section)
+            groups.append((source_section if source_section.is_file() else None, target_section))
     source_files = set(assets) | {p.with_suffix(".json") for p in sidecars}
-    report = {"source": str(article), "target": str(target), "dry_run": dry_run, "max_edge": max_edge,
+    report = {"source": str(article), "destination": destination, "target": str(target),
+              "dry_run": dry_run, "max_edge": max_edge,
               "converted": sum(s.suffix.lower() in TEXTURES for s in assets),
               "files": ["index.md"] + [p.as_posix() for p in assets.values()],
               "removed_code_links": sorted(removed), "unpublished_refs": sorted(unpublished_refs),
@@ -356,14 +362,14 @@ def publish(article, dry_run=False, max_edge=0, progress=None):
         stage.mkdir()
         textures = []
         for source, output in assets.items():
-            destination = stage / output
-            destination.parent.mkdir(parents=True, exist_ok=True)
+            output_path = stage / output
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             if source.suffix.lower() in TEXTURES:
-                textures.append({"source": str(source), "destination": str(destination), "sidecar": sidecars.get(source, {})})
+                textures.append({"source": str(source), "destination": str(output_path), "sidecar": sidecars.get(source, {})})
             elif source in texts:
-                destination.write_text(texts[source], encoding="utf-8")
+                output_path.write_text(texts[source], encoding="utf-8")
             else:
-                shutil.copy2(source, destination)
+                shutil.copy2(source, output_path)
         converted = []
         if progress:
             progress({"phase": "textures", "completed": 0, "total": len(textures), "file": ""})
@@ -406,28 +412,28 @@ def publish(article, dry_run=False, max_edge=0, progress=None):
         previous = work / "previous"
         created_sections = []
         try:
-            for source, destination in groups:
-                no_redirect(destination, posts)
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                if not destination.exists():
-                    created_sections.append(destination)
-                    if source:
-                        shutil.copy2(source, destination)
+            for group_source, group_target in groups:
+                no_redirect(group_target, section)
+                group_target.parent.mkdir(parents=True, exist_ok=True)
+                if not group_target.exists():
+                    created_sections.append(group_target)
+                    if group_source:
+                        shutil.copy2(group_source, group_target)
                     else:
-                        destination.write_text("+++\n" + tomlkit.dumps({"title": destination.parent.name}) + "+++\n", encoding="utf-8")
+                        group_target.write_text("+++\n" + tomlkit.dumps({"title": group_target.parent.name}) + "+++\n", encoding="utf-8")
             target.parent.mkdir(parents=True, exist_ok=True)
-            no_redirect(target, posts)
+            no_redirect(target, section)
             if target.exists():
                 rename_directory(target, previous)
             rename_directory(stage, target)
         except BaseException:
             if previous.exists():
                 rename_directory(previous, target)
-            for section in reversed(created_sections):
-                no_redirect(section, posts)
-                section.unlink(missing_ok=True)
+            for created in reversed(created_sections):
+                no_redirect(created, section)
+                created.unlink(missing_ok=True)
             raise
-    report["preview_url"] = preview_url(root, target, front, relative)
+    report["preview_url"] = preview_url(root, target, front, relative, destination)
     return report
 
 
@@ -437,9 +443,11 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--max-edge", type=int, default=0, help="DDS/EXR 转 PNG 的最长边，0 保留原尺寸")
+    parser.add_argument("--destination", choices=list(DESTINATIONS), default="public",
+                        help="发布目标：public 生成到 content/posts，protect 生成到 content/protect")
     options = parser.parse_args()
     try:
-        report = publish(options.article, options.dry_run, options.max_edge)
+        report = publish(options.article, options.dry_run, options.max_edge, destination=options.destination)
         if options.json:
             print(json.dumps(report, ensure_ascii=False))
         else:

@@ -1,0 +1,30 @@
+.draft-status-button {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.draft-status-button:hover { opacity: 1; }
+.draft-status-button:focus-visible { outline: 2px solid currentColor; }
+.draft-status-dialog {
+  width: min(520px, calc(100vw - 32px));
+  margin: auto;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--theme);
+  color: var(--primary);
+}
+.draft-status-dialog::backdrop { background: rgba(0, 0, 0, .6); }
+.draft-status-dialog h2 { margin: 0 0 16px; }
+.draft-status-dialog p { margin: 12px 0; }
+.draft-status-actions { display: flex; justify-content: flex-end; gap: 12px; }
+.draft-status-actions button {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.draft-status-actions button:disabled { opacity: .5; cursor: wait; }
+.draft-confirm { background: var(--primary); color: var(--theme); }
