@@ -1,0 +1,8 @@
+.lp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lp-stat { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.lp-stat strong { display: block; margin-top: 4px; font-size: 17px; }
+.lp-path { overflow-wrap: anywhere; font-size: 12px; }
+.lp-warning { padding: 10px 12px; border-left: 3px solid #d99429; background: var(--tertiary); border-radius: 4px; }
+.lp-overlay .ps-status { padding-top: 12px; flex-wrap: wrap; }
+.lp-overlay #lp-status-text { overflow-wrap: anywhere; }
+.lp-progress { flex-basis: 100%; width: 100%; height: 7px; accent-color: var(--primary); }

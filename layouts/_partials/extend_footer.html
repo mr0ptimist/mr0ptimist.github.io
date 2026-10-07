@@ -80,14 +80,20 @@
   var widthValue = document.getElementById('width-value');
   var widthToggle = document.getElementById('width-toggle');
   var mainEl = document.querySelector('.main');
+  var navEl = document.querySelector('.header-nav');
 
   function adjustMainMargin() {
     if (!mainEl) return;
     var toc = document.querySelector('details.toc');
     var tocW = 220;
     if (toc && toc.style.width) tocW = parseFloat(toc.style.width);
-    mainEl.style.marginLeft = (10 + tocW) + 'px';
+    mainEl.style.marginLeft = toc && getComputedStyle(toc).position === 'fixed' ? (10 + tocW) + 'px' : 'auto';
     mainEl.style.marginRight = 'auto';
+    if (navEl) {
+      navEl.style.maxWidth = mainEl.style.maxWidth;
+      navEl.style.marginLeft = mainEl.style.marginLeft;
+      navEl.style.marginRight = mainEl.style.marginRight;
+    }
   }
 
   var saved = sessionStorage.getItem('blog_width');
@@ -99,6 +105,7 @@
     mainEl.style.maxWidth = widthSlider.value + 'px';
   }
   adjustMainMargin();
+  window.addEventListener('resize', adjustMainMargin);
 
   if (widthToggle) {
     widthToggle.addEventListener('click', function() {
@@ -144,7 +151,7 @@
 </script>
 
 <script>
-window.ImageViewerConfig = { workingDir: "{{ hugo.WorkingDir }}" };
+window.ImageViewerConfig = { workingDir: "{{ hugo.WorkingDir }}", publishedLocal: {{ .Params.local_publication | default false }} };
 </script>
 <script src="{{ "js/worker-shared.js" | relURL }}?v=24"></script>
 <script src="{{ "js/dds-codec.js" | relURL }}?v=1"></script>
@@ -152,7 +159,8 @@ window.ImageViewerConfig = { workingDir: "{{ hugo.WorkingDir }}" };
 <script src="{{ "js/exr-parser.js" | relURL }}?v=1"></script>
 <script src="{{ "js/color-remap.js" | relURL }}?v=1"></script>
 <script src="{{ "js/export-texture.js" | relURL }}?v=2"></script>
-<script src="{{ "js/image-viewer.js" | relURL }}?v=28"></script>
+<script src="{{ "js/published-texture.js" | relURL }}?v=2"></script>
+<script src="{{ "js/image-viewer.js" | relURL }}?v=33"></script>
 
 <script>
 (function(){

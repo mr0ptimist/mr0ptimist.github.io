@@ -1,0 +1,14 @@
+{{- $files := slice -}}
+{{- range os.ReadDir .directory -}}
+    {{- $name := path.Join $.prefix .Name -}}
+    {{- if .IsDir -}}
+        {{- range partial "local_publish_files.html" (dict "directory" (path.Join $.directory .Name) "prefix" $name "resources" $.resources) -}}
+            {{- $files = $files | append . -}}
+        {{- end -}}
+    {{- else -}}
+        {{- $url := "" -}}
+        {{- with $.resources.GetMatch $name -}}{{- $url = .RelPermalink -}}{{- end -}}
+        {{- $files = $files | append (dict "name" $name "bytes" .Size "url" $url) -}}
+    {{- end -}}
+{{- end -}}
+{{- return $files -}}

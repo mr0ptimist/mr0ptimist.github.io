@@ -1,8 +1,56 @@
+.header-primary,
+.header-actions {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.header-primary {
+    gap: var(--gap);
+}
+
+.header-primary .logo {
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+}
+
+.header-primary .menu {
+    min-width: 0;
+}
+
+.header-actions {
+    flex-wrap: wrap;
+    align-content: center;
+    justify-content: flex-end;
+    gap: 4px;
+    min-height: var(--header-height);
+    margin-inline-start: auto;
+}
+
+.header-actions > * {
+    flex-shrink: 0;
+}
+
+.header-actions .logo-switches {
+    min-height: 0;
+    flex-wrap: nowrap;
+}
+
+.header-actions .nav-stats {
+    line-height: normal;
+}
+
+.header-actions .collapse-all-btn {
+    display: inline-flex;
+    margin-left: 0;
+}
+
 .nav-stats {
     font-size: 12px;
     color: var(--secondary);
     white-space: nowrap;
-    margin-left: auto;
     padding: 0 8px;
     opacity: 0.7;
     align-self: center;

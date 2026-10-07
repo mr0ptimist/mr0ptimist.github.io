@@ -17,9 +17,7 @@ echo   vscodeContentBase = '%ROOT_DIR%'
 echo ignoreFiles = ['\.rdc$', '\.mp4$', '\.pdf$']
 ) > "config\development\hugo.toml"
 
-:: Register winfs/cc/cca protocols -> machine-stable relay (HKCU, no admin). Re-runs when
-:: the entries are missing or still point at an old project-absolute path.
-reg query HKCU\Software\Classes\cca\shell\open\command /ve 2>nul | findstr /i "protocol-relay" >nul || powershell -NoProfile -ExecutionPolicy Bypass -File "%CD%\scripts\setup_winfs_protocol.ps1"
-copy /Y "%CD%\scripts\protocol-relay.ps1" "%LOCALAPPDATA%\GithubIO\protocols\protocol-relay.ps1" >nul
+python -X utf8 "%CD%\scripts\setup_winfs_protocol.py"
+if errorlevel 1 exit /b 1
 
-hugo server -D -p 1313
+python -X utf8 "%CD%\scripts\local_publish_server.py" --with-preview

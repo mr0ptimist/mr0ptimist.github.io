@@ -1,0 +1,9 @@
+{{- $bytes := 0 -}}
+{{- range os.ReadDir . -}}
+    {{- if .IsDir -}}
+        {{- $bytes = add $bytes (partial "article_folder_size.html" (path.Join $ .Name)) -}}
+    {{- else -}}
+        {{- $bytes = add $bytes .Size -}}
+    {{- end -}}
+{{- end -}}
+{{- return $bytes -}}

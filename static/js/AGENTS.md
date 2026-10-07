@@ -16,6 +16,8 @@
 | `sort-bar.js` | `<script>`（列表页） | 文章列表排序：树形/平铺双模式。通过 `window.SortBarConfig` 配置。 |
 | `mermaid-init.js` | `<script>`（按需，有 Mermaid 页面） | Mermaid 图表渲染：初始化配置、`<<interface>>` 修复、Dark Reader 防护。 |
 | `color-remap.js` | `<script>` | 颜色通道重映射工具。 |
+| `published-texture.js` | `<script>`（image-viewer 之前） | 发布器 RGB8/灰度 Alpha PNG 解码与 RGBA 组装，兼容旧 RGBA8 PNG，保留独立 RGB/A。暴露 `window.PublishedTexture`。 |
+| `publish-local.js` | `<script>`（仅开发预览 local 文章，header.html） | 发布配置面板：读取贴图头预估图数与体积，通过本机 HTTP 服务生成公开副本；显示逐张完成数量、文件名、进度条及任务结果；流程和验证见 [发布说明](../../scripts/README-publish-local.md)。 |
 | `page-shot.js` | `<script>`（仅 dev 配置文章页，header.html） | 「渲染页面为图片」：html2canvas 长图/整页/屏幕截图 + 选项弹窗。`?v=N` 版本号。 |
 
 ## 加载顺序
@@ -26,7 +28,9 @@
 3. `dds-parser.js` → 定义 `DDS`
 4. `exr-parser.js` → 定义 `EXR`
 5. `color-remap.js` → 颜色重映射
-6. `image-viewer.js` → 初始化全部 UI 逻辑
+6. `export-texture.js` → 图片导出
+7. `published-texture.js` → 发布 PNG 像素读取
+8. `image-viewer.js` → 初始化全部 UI 逻辑
 
 **按需加载**（`extend_head.html`）：
 - `gpu-graph.js` → 页面有 {{< gpugraph >}} 时
@@ -48,6 +52,7 @@
 - **`public/js/` 是 Hugo 构建输出**，不手动编辑。源码只维护 `static/js/`。
 - **Worker URL** 从 `image-viewer.js` 的 `<script src>` 推导，避免硬编码 `/js/...` 路径。
 - **`workingDir`** 通过 `window.ImageViewerConfig.workingDir` 注入（Hugo 模板渲染），静态 JS 不包含 Hugo 模板语法。
+- **发布 PNG**：`window.ImageViewerConfig.publishedLocal` 由 `local_publication` front matter 注入；sidecar 的 `publication` 记录源格式，mip/array 控件以实际纹理载荷为准。`published-texture.js` 和 `publish-local.js` 改动后分别递增加载模板的 `?v=N`。
 
 ## ⚠️ Worker 缓存陷阱
 

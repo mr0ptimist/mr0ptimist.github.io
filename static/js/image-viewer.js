@@ -445,8 +445,7 @@
           for (var i = 0; i < px.length; i += 4) { var a = px[i+3]; px[i]=a; px[i+1]=a; px[i+2]=a; px[i+3]=255; }
           tb.classList.add('pinned');
         } else if (ch === 'RGBA') {
-          for (var i = 0; i < px.length; i += 4) { var a = px[i+3]/255; px[i]=px[i]*a; px[i+1]=px[i+1]*a; px[i+2]=px[i+2]*a; }
-          tb.classList.add('pinned');
+          tb.classList.add('pinned'); // Canvas 自行合成透明度，保留独立 RGB。
         } else {
           var ci = {'R':0,'G':1,'B':2}[ch];
           for (var i = 0; i < px.length; i += 4) { var v = px[i+ci]; px[i]=v; px[i+1]=v; px[i+2]=v; px[i+3]=255; }
@@ -478,7 +477,9 @@
 
     // --- Range remap sliders (DDS/EXR only) ---
     var rangeRow = null, loSlider = null, hiSlider = null, loLabel = null, hiLabel = null;
-    var showRange = ColorRemap && ColorRemap.needsRange(fam0, isExr);
+    var publishedData = jsonCache.get(img.src.replace(/\.[^.]+$/, '.json'));
+    var publishedPng = /\.png$/i.test(img.src) && publishedData && publishedData.publication;
+    var showRange = !publishedPng && ColorRemap && ColorRemap.needsRange(fam0, isExr);
     if (showRange) {
       var rangeSpacer = document.createElement('div');
       rangeSpacer.style.cssText = 'flex-basis:100%;height:0';
@@ -753,6 +754,15 @@
       if (!data) return;
       var rd = data.renderdoc || {}, ai = data.ai || {};
 
+      if (data.publication && data.publication.channels) {
+        var publishedChannels = data.publication.channels;
+        tb.querySelectorAll('[data-ch]').forEach(function(btn) {
+          var ch = btn.dataset.ch;
+          if (ch === 'RGB') return;
+          if (ch === 'RGBA' ? publishedChannels.indexOf('A') < 0 : publishedChannels.indexOf(ch) < 0) btn.style.display = 'none';
+        });
+      }
+
       if (data.flip_y) {
         var el = wrapper.querySelector('canvas') || wrapper.querySelector('img');
         if (el) { el.style.transform = 'scaleY(-1)'; }
@@ -771,9 +781,16 @@
       ['event_id','resource_name'].forEach(function(k) { if (data[k] !== undefined) lines.push(k + ': ' + data[k]); });
       var cachedFmt = ddsCache.get(img.src);
       var ddsFmt = cachedFmt && cachedFmt.dds ? cachedFmt.dds.fmt : null;
-      if (rd.format) lines.push('format: ' + rd.format);
+      if (data.publication) lines.push('PNG preview: mip 0 / slice 0');
+      if (rd.format) lines.push((data.publication ? 'source format: ' : 'format: ') + rd.format);
+      else if (data.publication && data.publication.source_format) lines.push('source format: ' + data.publication.source_format);
       else if (ddsFmt) lines.push('format: ' + (ddsFmt.type || '') + ' (DXGI ' + ddsFmt.dxgi + ')');
-      if (rd.size) lines.push('size: ' + rd.size);
+      if (data.publication) {
+        lines.push('size: ' + w + 'x' + h);
+        if (rd.size) lines.push('source size: ' + rd.size);
+        else if (data.publication.source_size) lines.push('source size: ' + data.publication.source_size.join('x'));
+      }
+      else if (rd.size) lines.push('size: ' + rd.size);
       else lines.push('size: ' + w + 'x' + h);
       if (rd.mips !== undefined) lines.push('mips: ' + rd.mips);
       else if (cachedFmt && cachedFmt.dds) lines.push('mips: ' + cachedFmt.dds.mips);
@@ -790,7 +807,7 @@
       if (cachedDds && cachedDds.dds && cachedDds.dds.resDim === 2) lines.push('type: 1D texture');
       var cachedM = ddsCache.get(img.src);
       var ddsMips = cachedM && cachedM.dds ? cachedM.dds.mips : 1;
-      var totalMips = parseInt(rd.mips) || ddsMips;
+      var totalMips = cachedFmt && cachedFmt.dds ? (parseInt(rd.mips) || ddsMips) : 1;
       if (ai.content || ai.pipeline_stage) {
         if (ai.pipeline_stage) lines.push('[AI] stage: ' + ai.pipeline_stage);
         if (ai.content) lines.push('[AI] ' + ai.content);
@@ -801,7 +818,7 @@
       inner.textContent = lines.join('\n');
       var cachedDdsArr = ddsCache.get(img.src);
       var totalArray = cachedDdsArr && cachedDdsArr.dds ? cachedDdsArr.dds.arraySize : 1;
-      if (totalArray <= 1) totalArray = parseInt(rd.array_size) || 1;
+      if (totalArray <= 1 && cachedDdsArr && cachedDdsArr.dds) totalArray = parseInt(rd.array_size) || 1;
       var curSlice = 0;
 
       // 当前帧（mip × slice）的原子切换（缺陷 8）：整帧算好后一次性替换全部状态
@@ -1173,7 +1190,18 @@
       img.removeEventListener('load', onload);
       processImage(img, img.naturalWidth, img.naturalHeight, null);
     };
-    if (img.complete && img.naturalWidth > 0) { onload(); }
+    if (window.ImageViewerConfig && ImageViewerConfig.publishedLocal && /\.png$/i.test(img.src) && window.PublishedTexture) {
+      var publishedJsonUrl = img.src.replace(/\.png$/i, '.json');
+      fetch(publishedJsonUrl).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }).then(function(data) {
+        if (data) jsonCache.set(publishedJsonUrl, data);
+        if (data && data.publication && (data.publication.rgb_png || data.publication.rgba_png)) {
+          return PublishedTexture.load(img.src, data.publication)
+            .then(function(frame) { processImage(img, frame.w, frame.h, frame.pixels); });
+        }
+        if (img.complete && img.naturalWidth > 0) onload();
+        else img.addEventListener('load', onload);
+      }).catch(function(e) { showErrorPlaceholder(img, img.naturalWidth, img.naturalHeight, e.message); });
+    } else if (img.complete && img.naturalWidth > 0) { onload(); }
     else { img.addEventListener('load', onload); }
   }
 

@@ -3,6 +3,7 @@
 // 导航到目标页并等到树形视图渲染完成，返回 evaluate/close。
 const { spawn } = require('child_process');
 const fs = require('fs'), os = require('os'), path = require('path');
+const { threadId } = require('worker_threads');
 
 const CANDIDATES = [
   process.env.CHROME_PATH,
@@ -19,7 +20,8 @@ async function openPage(url, opts) {
   const exe = CANDIDATES.find(p => fs.existsSync(p));
   if (!exe) throw new Error('未找到 Chrome/Edge，可用环境变量 CHROME_PATH 指定');
 
-  const profile = path.join(os.tmpdir(), 'cdp-profile-' + Date.now());
+  const profile = path.join(os.tmpdir(), 'cdp-profile-' + process.pid + '-' + (threadId || 0) + '-' +
+    Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10));
   const chrome = spawn(exe, ['--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader',
     '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0',
     '--user-data-dir=' + profile, 'about:blank'], { stdio: 'ignore' });
