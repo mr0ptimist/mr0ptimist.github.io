@@ -30,6 +30,7 @@ Hugo 版本：0.160.1 extended。
 - **DDS/EXR 直接查看器**：浏览器端像素解码 + WebGL 显示，无需生成预览 PNG。详情见 `static/js/AGENTS.md`
 - **KaTeX 数学公式**：本地托管（`static/vendor/katex/`），全站加载。`$...$` 行内、`$$...$$` 块级，初始化在 `extend_footer.html`
 - **Mermaid 图表**：本地托管（`static/vendor/mermaid.min.js`），按需加载。初始化在 `static/js/mermaid-init.js`
+- **draw.io 图表**：短代码 `{{< drawio >}}`（`layouts/shortcodes/drawio.html`），客户端渲染 embed.diagrams.net，自动适配暗色模式、按图幅内容设边框。`.drawio` 文件放文章 Page Bundle（`src` 按资源名匹配，找不到时页面内显示警告框）；`ratio` 默认 `3/1`，也可用 `height="600"` 指定像素高。图优先 Mermaid，需要精细形状/可交互时才用 drawio
 - **GPU 调用图**：vis-network 短代码（`{{< gpugraph >}}`），本地托管（`static/vendor/vis-network.min.js`）
 - **列表排序**：`static/js/sort-bar.js` 共享模块，`list.html` 和 `section/local.html` 通过 `window.SortBarConfig` 配置
 - **404 页面**：`layouts/404.html`，中文友好提示
