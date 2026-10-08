@@ -18,7 +18,7 @@ categories = ['图形渲染']
 4. Shader 在哪里读取并计算？
 5. 结果写到临时纹理、GBuffer，还是直接加进 Scene Color？
 
-[PBRT 的光传输方程](https://www.pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/The_Light_Transport_Equation)仍然是理论总地图，但实际 Shader 很少原样写一个“辐亮度积分”。工程里更常见的是遍历有限数量的灯、读取 Lightmap 或 Probe、采样已经过滤好的 Cubemap，再把这些结果相加。
+[PBRT 的光传输方程](https://www.pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/The_Light_Transport_Equation)可以先理解成一句话：**你看到的表面颜色，来自它自己发出的光，以及它把周围的光反射到眼睛里的结果。** 游戏会把这份工作拆给不同系统：逐盏算灯光、读取 Lightmap 或 Probe、查询反射，最后合在一起。本文就沿着这些数据往下追，重点讨论普通不透明材质；玻璃透射、皮肤内部散射和体积雾需要另外展开。
 
 ## 一帧里的光照总账
 
@@ -31,13 +31,14 @@ flowchart TD
     B --> D["Lightmap、Light Probe、Probe Volume<br/>SSGI 或实时 GI：计算间接漫反射"]
     C --> C1["计算直接漫反射"]
     C --> C2["计算直接镜面反射"]
-    C1 --> E["当前光照总和"]
+    C1 --> E["合并五项贡献"]
     C2 --> E
     D --> E
-    E --> F["Probe、SSR、Planar、光追或 Lumen<br/>加入间接镜面反射"]
-    E --> G["加入材质 Emissive"]
-    F --> H["最终 HDR Scene Color"]
-    G --> H
+    B --> F["Probe、SSR、Planar、光追或 Lumen<br/>计算环境镜面反射"]
+    B --> G["取得材质 Emissive"]
+    F --> E
+    G --> E
+    E --> H["最终 HDR Scene Color"]
     classDef io fill:#fff3e0,color:#000
     classDef proc fill:#e1f5fe,color:#000
     classDef result fill:#f3e5f5,color:#000
@@ -46,7 +47,7 @@ flowchart TD
     class H result
 ```
 
-把反射光按“直接/间接”和“漫反射/镜面反射”交叉拆开，再加上自发光：
+读 Shader 时，先把颜色分成五项：逐灯算出的漫反射和高光、从烘焙或环境系统取来的漫反射和倒影，再加上自发光。代码里常把后两项叫作 `indirectDiffuse` 和 `indirectSpecular`，本文沿用这些名字：
 
 ```hlsl
 float3 color = emission;
@@ -56,7 +57,7 @@ color += indirectDiffuse;
 color += indirectSpecular;
 ```
 
-这不是某个引擎的原始代码，而是一张用于读代码的清单。真实引擎可能把直接漫反射和直接镜面反射放在同一个函数里算完并一起返回，也可能继续拆出 Clear Coat、Transmission、Subsurface 等项，但逻辑上仍然能放回这几个格子。
+这是一张读代码用的清单，五项不一定分别存放，也不代表执行顺序。**这里按“引擎从哪里取光”记账，不能只看通道名就判断光反弹了几次。** 例如 Lightmap 和 Light Probe 可以同时存着烘焙灯的直接照明与反弹光，天空也可以直接照亮表面；它们仍可能走名为 `GI` 或 `indirect` 的入口。具体装了什么，要看烘焙设置和上游生成过程。[Unity 的灯光模式说明](https://docs.unity3d.com/6000.0/Documentation/Manual/LightModes-introduction.html)明确区分了这些情况。
 
 | 光照项 | 常见输入数据 | 常见计算位置 | 常见输出位置 |
 |---|---|---|---|
@@ -66,7 +67,7 @@ color += indirectSpecular;
 | 间接镜面反射 | Sky / Reflection Probe、SSR、Planar、Ray Traced Reflections、Lumen Reflections | 材质 Pass 或 Reflection Composite | Scene Color |
 | 自发光 | 材质常量或 Emissive 纹理 | Base Pass / Material Pass | Scene Color；也可能被 GI 系统再次收集 |
 
-### Forward 和 Deferred 只是“在哪儿算”不同
+### Forward 和 Deferred：先找到光照在哪儿算
 
 ```mermaid
 flowchart LR
@@ -84,12 +85,12 @@ flowchart LR
 
 ## 直接光：同一盏灯怎样产生漫反射和高光
 
-“直接/间接”描述光走过的路径，“漫反射/镜面反射”描述材质怎样处理这束光。它们不是同一套分类。因此，一盏直接照到物体的灯通常会同时产生：
+这一节看逐灯计算：拿到一盏灯的方向、颜色与阴影后，分别计算它照出的底色和高光。同一盏灯可以同时产生：
 
 - **直接漫反射**：主要形成物体被照亮的底色，常受 BaseColor、Metallic 和法线影响。
 - **直接镜面反射**：主要形成灯光高光，常受 Roughness、F0、法线和观察方向影响。
 
-玻璃、皮肤、Clear Coat 等材质还可能继续产生透射或额外高光层；这里先只保留所有常规 PBR 材质都会遇到的两项。
+两项各占多少由材质决定，例如理想金属基本没有漫反射。Clear Coat 还会增加一层高光，这里先看基础材质。
 
 ### 通用实现流程
 
@@ -236,7 +237,7 @@ URP Forward 是“画物体时循环灯”，UE Deferred 是“画完材质后�
 
 ### 同一个 Shader 入口可以接很多来源
 
-间接漫反射解决的是阴影区域的整体亮度、墙面反弹色和室内外光照过渡。它不一定实时，也不一定烘焙；这只取决于上游怎样生成数据。
+这一项给表面提供逐灯计算之外的底色照明：阴影里还能看见物体、白墙染上附近红墙的颜色、角色从室外走进室内时逐渐变暗。Lightmap 和 Probe 可以提前存好照明，SSGI、DDGI、Lumen 等系统则可以在运行时更新。**先问这份数据已经包含哪些灯、哪些反弹光，再决定还要加什么，避免把同一份光算两遍。**
 
 ```mermaid
 flowchart TD
@@ -257,7 +258,7 @@ flowchart TD
     A6 --> Q
     A7 --> Q
     C["查询输入<br/>Lightmap UV、世界位置、屏幕坐标<br/>Normal 或 Bent Normal"] --> Q
-    Q --> G["indirectIrradiance<br/>周围各方向汇总后的照明"]
+    Q --> G["diffuseLighting<br/>查询到的底色照明"]
     M["材质输入<br/>BaseColor、Metallic"] --> H["diffuseResponse<br/>漫反射材质响应"]
     G --> I["照明 × 漫反射材质响应"]
     H --> I
@@ -276,7 +277,7 @@ flowchart TD
 
 这里特意没有把 SH 与 Light Probe、Probe Volume 并列：**Light Probe 和 Probe Volume 是照明系统，SH 是它们经常使用的数据编码方式。** [Unity 的 Light Probe 数据说明](https://docs.unity3d.com/Manual/LightProbes-TechnicalInformation.html)明确记录了其 SH 系数布局；[NVIDIA RTXGI 的 DDGI 算法说明](https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/docs/Algorithms.md)则展示了动态 Probe 的 irradiance、distance、更新与可见性用途。SSGI 走的是另一条路，它依赖屏幕上已有的深度、法线和颜色。
 
-因此，看到一个名叫 `bakedGI` 或 `indirectIrradiance` 的变量时，不要立刻认定它来自烘焙。先追宏和 Shader Variant，它可能在不同配置下接 Lightmap、Light Probe、Probe Volume、SSGI 或实时 GI。
+因此，看到 `bakedGI` 时，先追宏和 Shader Variant：它可能接 Lightmap、Light Probe、Probe Volume 或实时 GI。变量名既不能证明数据来自烘焙，也不能证明里面只有反弹光。
 
 ### 一个游戏的环境漫反射通常怎样算
 
@@ -304,9 +305,9 @@ flowchart TD
 把 `EnvironmentBRDF()` 也展开，并暂时忽略 Clear Coat 后，可以更直白地写成：
 
 ```hlsl
-half3 indirectIrradiance = bakedGI;                                      // 光：Lightmap、Probe（常用 SH 编码）或实时 GI 汇总出的间接照明
+half3 diffuseLighting = bakedGI;                                        // 光：从当前 GI 路线查询到的底色照明
 half3 diffuseResponse = brdfData.diffuse;                                // 材质：有多少底色留给漫反射，这是漫反射 BRDF 的材质响应部分
-half3 indirectDiffuse = indirectIrradiance * diffuseResponse;            // 间接漫反射 = 周围照明 × 漫反射材质响应
+half3 indirectDiffuse = diffuseLighting * diffuseResponse;              // 查询到的照明 × 材质底色响应
 
 half3 indirectSpecular = GlossyEnvironmentReflection(...);              // 光：从反射方向查询到的环境镜面照明
 half3 specularResponse = EnvironmentBRDFSpecular(brdfData, fresnelTerm); // 材质：粗糙度、F0 和观察角度形成的环境高光响应
@@ -316,7 +317,7 @@ half3 color = indirectDiffuse + indirectSpecularResult;                  // 合�
 return color * occlusion;                                                // AO：减弱凹槽等难以接收环境光的位置
 ```
 
-这段代码很能说明实时渲染的实际样子：间接漫反射并没有跳过 BRDF，而是把工作拆开了。理论上的半球积分和各方向的 `NdotL` 已经被 Lightmap、使用 SH 等编码的 Probe，或 GI Pass 汇总成 `indirectIrradiance`；当前 Shader 再乘 `diffuseResponse`，完成材质响应。
+这条路线把工作拆成两段：上游和查询函数先算好“这个朝向的表面能接到多少照明”，当前 Shader 再用材质底色给它着色。表面朝向和亮度换算已经有各自的处理位置，不能在这里再随手乘一次 `NdotL` 或除一次 `π`。这种写法适合本例的漫反射近似；换材质模型时，要重新确认哪些计算已经做过。
 
 ### UE 5.8：预计算 GI 与 Lumen GI 走不同阶段
 
@@ -326,15 +327,15 @@ Lumen 和 SSGI 则不是简单塞进同一个 Base Pass 函数。`IndirectLightR
 
 Frostbite 的公开课程资料也采用类似的工程拆分思路：漫反射 GI、Reflection Probe、SSR 和天空反射分别准备，再在合适的位置组合，而不是让一个像素 Shader 临时追完整条光路。
 
-## 环境镜面反射：环境颜色 × 材质响应
+## 环境镜面反射：先找倒影，再看材质怎样参与
 
-直接镜面反射是某一盏灯在物体上形成的高光；环境镜面反射则是天空、房间和周围物体出现在材质上的倒影，也就是本文里的 `indirectSpecular`。先忽略不同引擎的命名，它们最终都在解决同一个问题：
+逐灯高光回答“这盏灯在表面哪里亮”，环境镜面反射回答“表面映出了什么天空、房间和物体”。先看 Reflection Probe 最常见的做法：取一份按粗糙度预先过滤好的环境颜色，再乘材质响应，得到本文里的 `indirectSpecular`：
 
 ```hlsl
 float3 indirectSpecular = reflectedEnvironment * specularResponse;      // 环境中反射到了什么 × 当前材质允许它显示多强
 ```
 
-这里的 `reflectedEnvironment` 通常是按照反射方向和 Roughness 过滤后的环境颜色：光滑表面取清晰 Mip，粗糙表面取模糊 Mip。`specularResponse` 则由 `NoV`、Roughness、F0 等材质和观察参数决定。
+这条 Probe 路线里，光滑表面取清晰的环境 Mip，粗糙表面取更模糊的 Mip；材质响应决定倒影的颜色和强弱。SSR、光追和 Lumen 则可能在追踪、采样时就把材质响应算进去，输出已经着色的反射结果。读代码时要先认清拿到的是哪一种，避免再乘一遍材质响应。
 
 ```mermaid
 flowchart TD
@@ -344,13 +345,14 @@ flowchart TD
     R --> R3["Planar Reflection<br/>从镜像相机再次渲染场景"]
     R --> R4["Ray Traced Reflections<br/>场景光线查询 + 降噪"]
     R --> R5["Lumen Reflections 等<br/>Screen Trace、Surface Cache、硬件光追"]
-    R1 --> B["来源选择、混合与缺失回退"]
-    R2 --> B
-    R3 --> B
-    R4 --> B
-    R5 --> B
-    B --> C["按反射方向与 Roughness 查询或过滤"]
+    R1 --> C["按反射方向与 Roughness 查询"]
     C --> D["reflectedEnvironment<br/>反射到了什么环境颜色"]
+    R2 --> T{"返回值已包含材质响应吗"}
+    R3 --> T
+    R4 --> T
+    R5 --> T
+    T -->|未包含| D
+    T -->|已包含| B["反射结果选择、混合与回退"]
 
     M["材质与观察输入<br/>NoV、Roughness、F0 / F90"] --> E{"材质响应路线"}
     E --> F["二维预积分 LUT<br/>Filament DFG、UE PreIntegratedGF"]
@@ -360,23 +362,24 @@ flowchart TD
     D --> I["环境颜色 × 镜面材质响应"]
     H --> I
     O["Specular Occlusion<br/>AO、Bent Normal 或 GTSO 等"] --> J["镜面遮蔽"]
-    I --> J
+    I --> B
+    B --> J
     J --> K["Indirect Specular"]
     classDef io fill:#fff3e0,color:#000
     classDef proc fill:#e1f5fe,color:#000
     classDef dec fill:#fff9c4,color:#000
     classDef result fill:#f3e5f5,color:#000
     class M,O io
-    class R,E dec
+    class R,E,T dec
     class R1,R2,R3,R4,R5,B,C,D,F,G,H,I,J proc
     class K result
 ```
 
-这里分成三个层级：**反射系统负责取得环境颜色，材质响应路线决定这份反射显示多强，镜面遮蔽再处理凹槽里不合理的漏光。** Cubemap 是 Sky 或 Reflection Probe 常用的数据表示，不与 SSR、Lumen 处在完全相同的抽象层；图中先写生产系统，再写它交给后续步骤的数据。[Epic 的 Reflection Environment 总览](https://dev.epicgames.com/documentation/unreal-engine/reflections-environment-in-unreal-engine)也把 Reflection Captures、SSR、Planar、Ray Tracing 与 Lumen 列为不同反射系统。
+图里按返回值把路线分开：拿到环境颜色，就继续算材质响应；拿到已经着色的反射结果，就进入合成。图中的混合和遮蔽表示需要追查的步骤，具体引擎可能提前在各来源内处理。[Epic 的 Reflection Environment 总览](https://dev.epicgames.com/documentation/unreal-engine/reflections-environment-in-unreal-engine)列出了这些反射系统。
 
-### 共同的输入与最终输出
+### 先认清反射结果算到了哪一步
 
-**这种技术最后会输出什么？** 环境来源经过过滤后输出 `reflectedEnvironment`，材质响应路线输出 `specularResponse`，两者相乘后输出当前像素的 `indirectSpecular`。具体引擎可以更换环境来源或材质响应算法，但这三个数据角色保持不变。
+Probe 常把“环境颜色”和“材质响应”分开准备，最后相乘；追踪路线可以边采样边计算材质响应，直接累计成反射结果。[Filament 的反射源码](https://github.com/google/filament/blob/main/shaders/src/surface_light_indirect.fs)就同时包含这两种做法。后续合成还要看清各来源怎样接替：例如 SSR 命中时用屏幕结果，缺失处回退到 Probe，不能把几份完整倒影直接相加。
 
 ### 路线一：二维预积分 BRDF LUT（Filament、UE）
 
@@ -406,22 +409,22 @@ Roughness 在这里出现了两次，但职责不同：采样环境时，它决�
 - **F（Fresnel）**：正面与掠射角观察时，反射强度怎样变化。
 - **G（Geometry）**：有多少微表面没有被其他微表面挡住。
 
-DFG LUT 把 D、F、G 在许多入射方向上的组合结果提前积分成 `DFG1/DFG2`，通常放在 RG 中。Filament 的标准重建方式如下：
+DFG LUT 把一大批方向上的材质计算提前做完，存成两个权重。这里按 Filament 当前公开源码的常规材质路线来读：R 存一份权重，G 存另一份，运行时用 F0 在两者之间插值。**LUT 的生成方式和读取公式必须配套，不能看见 RG 两个通道就套用别的引擎的公式。**
 
 ```glsl
 float NoV = saturate(dot(normalWS, viewDirectionWS));                         // X：观察角度
 vec2 dfg = textureLod(
-    dfgLut, vec2(NoV, perceptualRoughness), 0.0).rg;                          // Y：感知粗糙度；R=DFG1，G=DFG2
+    dfgLut, vec2(NoV, perceptualRoughness), 0.0).rg;                          // Y：感知粗糙度；读取配套的两个权重
 
 float lod = computeLODFromRoughness(perceptualRoughness);                    // 粗糙度决定环境图的模糊 Mip
 vec3 reflectedEnvironment = textureLod(
     prefilteredEnvMap, reflectionDirection, lod).rgb;                        // 第一部分：环境颜色
 
-vec3 specularResponse = f0 * dfg.x + f90 * dfg.y;                            // 第二部分：DFG 材质响应
+vec3 specularResponse = mix(dfg.xxx, dfg.yyy, f0);                           // 第二部分：用 F0 在两份权重间插值
 vec3 indirectSpecular = reflectedEnvironment * specularResponse;             // 两部分合成最终环境镜面反射
 ```
 
-生成 LUT 时已经完成了 D、F、G 的积分；运行时只需查表并与材质参数组合。Filament 的多次散射版本使用与 LUT 生成方式配套的 `mix(dfg.xxx, dfg.yyy, f0)` 重建，因此应当通过生成方式和重建公式判断 RG 通道含义。
+上面只展开环境查询与 DFG 响应的组合，省略了能量补偿、遮蔽和额外材质层。[Filament 文档](https://google.github.io/filament/main/filament.html)把这套通道约定放在多次散射 LUT 小节中说明；实际消费端是 `specularDFG()`。
 
 #### UE 5.8：反射来源 + `PreIntegratedGF`
 
@@ -451,7 +454,7 @@ half3 reflectedEnvironment = GlossyEnvironmentReflection(...);         // 环境
 
 half NoV = saturate(dot(normalWS, viewDirectionWS));                    // 观察角度：越接近 0，越靠近物体轮廓
 half fresnelTerm = Pow4(1.0 - NoV);                                    // 掠射角权重：正面接近 0，轮廓附近接近 1
-float surfaceReduction = 1.0 / (brdfData.roughness2 + 1.0);            // 粗糙度越高，环境高光整体越弱
+float surfaceReduction = 1.0 / (brdfData.roughness2 + 1.0);            // URP 这条近似中随粗糙度变化的缩放项
 half3 specularResponse = surfaceReduction * lerp(
     brdfData.specular, brdfData.grazingTerm, fresnelTerm);             // 在 F0 颜色和掠射角响应之间插值
 
@@ -483,7 +486,7 @@ flowchart TD
     E --> F3["DDGI / RTGI<br/>光线命中发光表面"]
     E --> F4["Lumen 等<br/>Surface Cache 或场景表示"]
     E -.-> H["没有被 GI 收集<br/>只让材质自身发亮"]
-    F1 --> G["间接照亮附近物体"]
+    F1 --> G["照亮附近物体"]
     F2 --> G
     F3 --> G
     F4 --> G
@@ -507,7 +510,7 @@ flowchart TD
 
 ## 阴影和 AO 应该乘在哪里
 
-阴影和 AO 都会让画面变暗，但它们回答的问题不同。普通阴影回答“当前这盏灯到表面的路线有没有被挡住”；AO 回答“这个位置周围大范围环境有多封闭”。
+阴影和 AO 都会让画面变暗，但查的东西不同。逐灯阴影检查“这盏灯有没有被挡住”；AO 估计“附近几何把周围多少方向堵住了”，常用来压住墙角、缝隙里的漏亮。AO 主要用于环境照明，一些引擎也让它影响直接光：URP 的 `Direct Lighting Strength` 就控制这部分效果。**最终影响哪一项，要沿代码看乘法发生在哪里。**
 
 ```mermaid
 flowchart TD
@@ -518,7 +521,7 @@ flowchart TD
     S2 --> S22["Variance Shadow Maps、EVSM 等"]
     S --> S3["Virtual Shadow Maps"]
     S --> S4["屏幕空间 Contact Shadow"]
-    S --> S5["Distance Field / Capsule Shadow"]
+    S --> S5["Distance Field / Capsule<br/>此处看逐灯阴影分支"]
     S --> S6["Ray Traced Shadow"]
     S21 --> SA["Shadow Attenuation"]
     S22 --> SA
@@ -541,6 +544,7 @@ flowchart TD
     A3 --> AB
     A4 --> AB
     AF --> AD["减弱 Indirect Diffuse"]
+    AF -.-> AX["可选：影响直接光<br/>如 URP Direct Lighting Strength"]
     AB --> AQ["改变环境光查询方向"]
     AQ --> AD
     AF --> AS["Specular Occlusion<br/>经验公式、Cone Intersection、GTSO 等"]
@@ -553,12 +557,12 @@ flowchart TD
     class SA,AF,AB io
     class S,S2,A dec
     class S1,S21,S22,S3,S4,S5,S6,A1,A2,A3,A4,AQ,AS proc
-    class SD,AD,AI result
+    class SD,AD,AI,AX result
 ```
 
 图里把容易混淆的名字拆成了“技术”和“输出”：SSAO、HBAO、GTAO、DFAO、RTAO 等技术生成 AO；Shadow Map、Virtual Shadow Maps、Contact Shadow、光追阴影等技术生成某盏灯的 `Shadow Attenuation`。[Unity URP 的 SSAO 文档](https://docs.unity3d.com/6000.0/Documentation/Manual/urp/ssao-renderer-feature-reference.html)、[NVIDIA 的 HBAO+ 说明](https://developer.nvidia.com/rendering-technologies/horizon-based-ambient-occlusion-plus)、[Intel 的 XeGTAO 实现](https://github.com/GameTechDev/XeGTAO)、[Epic 的 DFAO 文档](https://dev.epicgames.com/documentation/unreal-engine/distance-field-ambient-occlusion-in-unreal-engine)和 [Unity HDRP 的 RTAO 文档](https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@10.1/manual/Ray-Traced-Ambient-Occlusion.html)分别给出了这些路线的实际例子。其中 **VSM 这个缩写可能指 Variance Shadow Maps，也可能指 UE 的 Virtual Shadow Maps**，记录案例时应写全名。
 
-这也是为什么不能看到一张灰度 AO 纹理就随手乘整个最终颜色：那样会连不该受影响的直接光、自发光一起压黑。具体引擎可能为了美术效果做额外处理，但分析时应该先找清它究竟乘到了哪一个光照桶。
+因此，不能拿到 AO 就随手乘整个最终颜色：这会连自发光一起压黑，也绕过了引擎对直接光影响程度的控制。如果 GI 已经算过附近的遮挡，还要确认额外 AO 是补细节还是把同一处又压暗一次。
 
 ## 光照技能树：所有案例共用的一张总图
 
@@ -570,7 +574,7 @@ flowchart TD
     SPLIT --> DIRECT
     SPLIT --> INDIRECT
 
-    subgraph DIRECT["左：直接光"]
+    subgraph DIRECT["左：逐灯光照"]
         direction TD
         DR{"直接光"} --> DO{"灯光组织"}
         DO --> DO1["Forward Light List"]
@@ -586,10 +590,14 @@ flowchart TD
         SM --> SF{"Shadow Map 过滤"}
         SF --> SF1["Hard、PCF、PCSS"]
         SF --> SF2["Variance Shadow Maps、EVSM"]
+        SV --> BSH["烘焙阴影 / Shadow Mask"]
+        SV --> CSH["云影调制"]
+        BSH --> SAT
+        CSH --> SAT
         SV --> SX{"其他实时阴影"}
         SX --> VS["Virtual Shadow Maps"]
         SX --> CS["屏幕空间 Contact Shadow"]
-        SX --> DFS["Distance Field / Capsule Shadow"]
+        SX --> DFS["Distance Field / Capsule<br/>逐灯阴影分支"]
         SX --> RTS["Ray Traced Shadow"]
         SF1 --> SAT["Shadow Attenuation"]
         SF2 --> SAT
@@ -607,6 +615,7 @@ flowchart TD
         DB --> DB3["Oren-Nayar 等"]
         DM --> SB{"Specular BRDF"}
         SB --> SB1["GGX 微表面"]
+        SB1 --> GGF["解析或简化公式计算"]
         SB --> SB2["Beckmann、Blinn-Phong 等"]
         IL --> DDC["计算直接漫反射"]
         DB1 --> DDC
@@ -617,13 +626,14 @@ flowchart TD
         SB2 --> DSC
         DDC --> DDO["Direct Diffuse"]
         DSC --> DSO["Direct Specular"]
+        DR --> NEG["负光 / 艺术化压暗<br/>分别调节漫反射与镜面反射"]
         DDO --> DOUT["直接光输出"]
         DSO --> DOUT
     end
 
-    subgraph INDIRECT["右：间接光"]
+    subgraph INDIRECT["右：烘焙与环境光照"]
         direction TD
-        IR{"间接光"} --> AOR{"环境遮蔽"}
+        IR{"GI 与环境反射入口"} --> AOR{"环境遮蔽"}
         AOR --> AOS{"屏幕空间 AO"}
         AOS --> AO2["SSAO、HBAO、GTAO"]
         AOR --> AOG{"材质或场景空间 AO"}
@@ -638,16 +648,24 @@ flowchart TD
         AO3 --> BN
         AO4 --> BN
         AOV --> SO["Specular Occlusion<br/>经验公式、Cone、GTSO 等"]
+        AOV --> AOM["直接乘 AO 的镜面遮蔽"]
+        AOM --> ISOC
+        AOV --> AOC["可选：乘已有 Scene Color<br/>影响范围取决于当时已合成的内容"]
+        AOV -.-> AOD["可选：影响逐灯光照<br/>如 URP 的直接光 AO"]
         BN --> SO
 
-        IR --> IB{"间接光主体"}
+        IR --> IB{"照明来源"}
         IB --> GIR{"间接漫反射"}
         GIR --> GIB{"烘焙与低频 Probe"}
         GIB --> GI1["Lightmap<br/>普通或 Directional"]
         GIB --> GI2["Light Probe<br/>常用 SH 编码"]
+        GIB --> ASH["环境 SH<br/>按表面朝向公式求值"]
+        ASH --> GIQ
         GIB --> GI3["Probe Volume / APV<br/>网格 + SH 或纹理 Atlas"]
         GIR --> GID{"动态 Probe"}
         GID --> GI4["DDGI<br/>Probe Irradiance + Distance"]
+        GID --> DSH["动态 SH 光照体积<br/>采样三维纹理后按方向求值"]
+        DSH --> GIQ
         GIR --> GIT{"屏幕、光追与场景缓存"}
         GIT --> GI5["SSGI<br/>屏幕空间追踪"]
         GIT --> GI6["RTGI<br/>光线查询 + 降噪"]
@@ -662,7 +680,7 @@ flowchart TD
         GIR --> GIC["查询输入<br/>UV、位置、屏幕坐标<br/>Normal 或 Bent Normal"]
         GIC --> GIQ
         BN --> GIQ
-        GIQ --> IRR["indirectIrradiance"]
+        GIQ --> IRR["diffuseLighting<br/>查询到的底色照明"]
         GIR --> GIM["材质输入<br/>BaseColor、Metallic"]
         GIM --> IDR["diffuseResponse"]
         IRR --> IDM["照明 × 漫反射材质响应"]
@@ -672,6 +690,8 @@ flowchart TD
         IDAO --> IDO["Indirect Diffuse"]
 
         IB --> ISR{"环境镜面反射"}
+        ISR --> BGS["烘焙方向估算高光<br/>方向数据 + 高光公式 + GI 颜色"]
+        BGS --> ISO
         ISR --> ISC{"捕获或重新渲染"}
         ISC --> IS1["Sky / Reflection Probe<br/>预过滤 Cubemap"]
         ISC --> IS3["Planar Reflection<br/>镜像相机再次渲染"]
@@ -679,12 +699,13 @@ flowchart TD
         IST --> IS2["SSR<br/>屏幕空间追踪"]
         IST --> IS4["Ray Traced Reflections<br/>光线查询 + 降噪"]
         IST --> IS5["Lumen Reflections 等<br/>Screen Trace + 场景缓存"]
-        IS1 --> RM["选择、混合、回退与降噪"]
-        IS2 --> RM
-        IS3 --> RM
-        IS4 --> RM
-        IS5 --> RM
-        RM --> RF["反射方向 + Roughness 过滤"]
+        IS1 --> RF["反射方向 + Roughness 查询"]
+        IS2 --> RT{"返回值已包含材质响应吗"}
+        IS3 --> RT
+        IS4 --> RT
+        IS5 --> RT
+        RT -->|未包含| REC
+        RT -->|已包含| RM["反射结果选择、混合与回退"]
         RF --> REC["reflectedEnvironment"]
         ISR --> ISMAT["材质与观察输入<br/>NoV、Roughness、F0 / F90"]
         ISMAT --> SRC{"环境镜面材质响应"}
@@ -695,7 +716,8 @@ flowchart TD
         REC --> ISM["环境颜色 × 镜面材质响应"]
         SR --> ISM
         SO --> ISOC["镜面遮蔽"]
-        ISM --> ISOC
+        ISM --> RM
+        RM --> ISOC
         ISOC --> ISO["Indirect Specular"]
         IDO --> IOUT["间接光输出"]
         ISO --> IOUT
@@ -704,6 +726,9 @@ flowchart TD
     subgraph EMISSION["独立：自发光"]
         direction TD
         ER{"自发光"} --> EM["材质 Emissive"]
+        EM --> EMS["贴图采样 / 顶点色 / 材质常量"]
+        ER --> EFX["借用发光通道的效果<br/>透光、视角边缘光等"]
+        EFX --> ESC
         EM --> ESC["写入 Scene Color"]
         ESC --> BLOOM["Bloom"]
         EM --> EDEC{"是否进入照明系统"}
@@ -711,6 +736,8 @@ flowchart TD
         EDEC --> E2["更新 Light Probe / Probe Volume"]
         EDEC --> E3["进入 DDGI / RTGI"]
         EDEC --> E4["进入 Lumen Surface Cache 等"]
+        EDEC --> EVX["体素化收集发光"]
+        EVX --> EGI
         EDEC -.-> ENO["只让材质自身发亮"]
         E1 --> EGI["成为间接光系统的输入"]
         E2 --> EGI
@@ -732,26 +759,33 @@ flowchart TD
     classDef specular fill:#e3f2fd,stroke:#42a5f5,color:#000
     classDef emission fill:#f3e5f5,stroke:#ab47bc,color:#000
     classDef result fill:#fff3e0,stroke:#ef6c00,color:#000,stroke-width:3px
+    class GGF,BSH,CSH,NEG direct
+    class AOM,AOC occlusion
+    class ASH,DSH diffuse
+    class BGS specular
+    class EMS,EFX,EVX emission
     class ROOT,SPLIT root
     class DR,DO,DO1,DO2,DO3,LD,ATT,SV,SM,SF,SF1,SF2,SX,VS,CS,DFS,RTS,SAT,IL,DM,DB,DB1,DB2,DB3,SB,SB1,SB2,DDC,DSC,DDO,DSO,DOUT direct
-    class IR,IB,AOR,AOS,AOG,AO1,AO2,AO3,AO4,AOV,BN,SO occlusion
+    class IR,IB,AOR,AOS,AOG,AO1,AO2,AO3,AO4,AOV,AOD,BN,SO occlusion
     class GIR,GIB,GID,GIT,GI1,GI2,GI3,GI4,GI5,GI6,GI7,GIC,GIQ,IRR,GIM,IDR,IDM,IDAO,IDO diffuse
-    class ISR,ISC,IST,IS1,IS2,IS3,IS4,IS5,RM,RF,REC,ISMAT,SRC,LUT,APX,SR,ISM,ISOC,ISO,IOUT specular
+    class ISR,ISC,IST,IS1,IS2,IS3,IS4,IS5,RT,RM,RF,REC,ISMAT,SRC,LUT,APX,SR,ISM,ISOC,ISO,IOUT specular
     class ER,EM,ESC,BLOOM,EDEC,E1,E2,E3,E4,ENO,EGI emission
     class REFLECTSUM,SUM,FINAL result
 ```
 
 读这棵树时只需要抓住五个最终光照桶：`Direct Diffuse`、`Direct Specular`、`Indirect Diffuse`、`Indirect Specular` 和 `Emissive`。阴影、AO、LUT、Probe、SSR 等名字都不是第六个光照桶，而是其中某条路径上的数据来源、查询方法或修正步骤。
 
-总树从顶部共同输入分成左右两组：左边是依赖明确灯光与逐灯阴影的直接光，右边是依赖 GI、环境反射与环境遮蔽的间接光。两组是并列贡献，不存在“直接光算完才能开始间接光”的依赖；实际执行顺序仍由 Forward、Deferred 和各个 Composite Pass 决定。自发光单独成支，最后与四个反射光照桶一起进入 HDR Scene Color。
+总树左边追逐灯计算，右边追烘焙、GI 和环境反射，沿用前文按入口记账的方式。它展示各项怎样归类，不规定 Pass 顺序；例如屏幕追踪需要先有可用的深度和颜色，实际依赖要回到案例里确认。自发光单独成支，最后与四个反射光照项一起进入 HDR Scene Color。
 
-总树现在用颜色区分直接光、环境遮蔽、间接漫反射、环境镜面反射和自发光五个大类，**这些颜色不表示某个案例已经启用它们**。后续案例复制总树后，再把分类色改成统一状态色：
+总树用颜色区分光照类别，**这些颜色不表示某个案例已经启用它们**。每篇光照模型分析文章都在开头复制这张完整 Mermaid 总树，保留节点 ID 和分支结构，用状态色高亮该案例的实际实现：
 
-- **彩色实线节点**：已经从 Shader、纹理、Buffer 或 Pass 中确认的技能点。
-- **灰色虚线节点**：当前案例明确没有走这条分支。
-- **黄色节点**：仅凭截图或变量名还不能确认，需要继续追上游。
-- 每个案例都完整复制这棵树，保留所有节点与顺序；在通用名称后补上实际函数、资源和 Pass 名，再改变节点颜色。即使案例只研究环境镜面反射，直接光、GI、AO 等未确认分支也仍然留在图里。
-- “灰色”只表示当前案例没有使用或已经排除，不等于该引擎完全不支持；没有证据时使用黄色，不能提前涂灰。
+- **绿色实线节点**：源码已确认的实现，节点内注明实际公式、纹理或函数。
+- **蓝色虚线节点**：源码存在，但取决于平台、关键字或运行时开关；注明启用条件。
+- **黄色节点**：只确认了部分数据流，具体算法或上游尚待确认。
+- **浅灰节点**：本次没有点亮的公共技术，不能据此断言项目不支持。
+- 发现实际技术在总树中没有对应节点时，先给公共总树补上通用技术分类，再同步案例树；内部项目名称和资源路径只写进本地案例。
+
+案例保留总树全貌，后面的局部图再展开具体数据流。高亮表示源码证据；要断言某一帧确实启用，还需要材质、关键字或抓帧证据。
 
 ## 以后分析引擎或游戏时的固定模板
 
@@ -763,7 +797,7 @@ flowchart TD
     B --> C["3. 反查每一项读取的纹理与 Buffer"]
     C --> D["4. 找到上游生成 Pass"]
     D --> E["5. 记录阴影、AO 与材质的结合位置"]
-    E --> F["6. 复制技能树并点亮已确认路径"]
+    E --> F["6. 对照技能树记录分支状态"]
     F --> G["7. 在节点中写入实际函数、资源与 Pass"]
     classDef proc fill:#e1f5fe,color:#000
     classDef result fill:#f3e5f5,color:#000
@@ -784,9 +818,10 @@ flowchart TD
 | AO 怎样生成并乘到哪里 | Material AO、SSAO/HBAO/GTAO、DFAO 或 RTAO 生成了 AO、Bent Normal 还是 Specular Occlusion；最终影响哪些光照桶 |
 | 自发光是否照亮别人 | 仅写 Scene Color，还是继续进入烘焙或实时 GI |
 | 最后怎样合成 | Forward 材质 Pass、Deferred Lighting Pass 或独立 Composite Pass |
-| 技能树点亮了什么 | 把已确认、未使用和待确认节点分别标色，并写入实际函数、纹理、Buffer 与 Pass 名 |
+| 技能树点亮了什么 | 开头复制公共 Mermaid 总树并高亮实际分支，区分已确认、条件启用与待确认；局部图展开实际函数、资源与 Pass |
+| 有没有重复计算 | 纹理里是否已经包含材质响应、遮蔽或某盏灯；多个 GI、反射来源是相加、混合还是回退 |
 
-Filament、Frostbite、URP 17.3.0 和 UE 5.8.3 先作为固定参照。以后加入具体游戏时，案例直接插入相应光照项下面，这样既能看到统一规律，也能对照实际代码差异。
+Filament、Frostbite、URP 17.3.0 和 UE 5.8.3 先作为参照。分项章节保留短例子，具体游戏的完整案例独立成节：从最终颜色往上追到生成 Pass，让同一帧的数据流连贯地放在一起。
 
 ## 参考
 

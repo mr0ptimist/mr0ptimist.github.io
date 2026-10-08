@@ -18,5 +18,6 @@
       "note": "UE 5.8.3 Release-5.8 的渲染器 C++ 源码，后续引用以本机 5.8.3 为准"
     }
   ],
-  "notes": "文章理论主干使用 PBRT 4e；实时公开案例使用 Google Filament 与 EA Frostbite 官方资料；引擎源码案例固定为 Unity 6000.3.23f1 / URP 17.3.0 和 Unreal Engine 5.8.3。RenderDoc 仅作为后续实际游戏案例的分析工具，不在正文中单列工具章节。官方来源：https://www.pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/The_Light_Transport_Equation ; https://google.github.io/filament/Filament.md.html ; https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/course-notes-moving-frostbite-to-pbr-v2.pdf"
+  "notes": "文章理论主干使用 PBRT 4e；实时公开案例使用 Google Filament 与 EA Frostbite 官方资料；引擎源码案例固定为 Unity 6000.3.23f1 / URP 17.3.0 和 Unreal Engine 5.8.3。RenderDoc 仅作为后续实际游戏案例的分析工具，不在正文中单列工具章节。写作偏好：大白话，少用物理量和学术解释；在概念首次出现时直接讲清适用范围，替换含混原句，不在后文堆补充说明。五项光照按工程入口记账，不据此推断光反弹次数；完整游戏案例独立成节，使用状态表和局部图。2026-09-29 核查：上述 Unity 本机路径不可用，公开分支对照不等于 URP 17.3.0 精确版本核验；UE 本机 Build.version 已确认 5.8.3。Filament 示例采用当日公开 main 分支 specularDFG 的 mix 重建方式，省略能量补偿等外围步骤。官方来源：https://www.pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/The_Light_Transport_Equation ; https://google.github.io/filament/Filament.md.html ; https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/course-notes-moving-frostbite-to-pbr-v2.pdf ; https://github.com/google/filament/blob/main/shaders/src/surface_light_indirect.fs ; https://docs.unity3d.com/6000.0/Documentation/Manual/LightModes-introduction.html",
+  "article_structure": "案例开头复制公共Mermaid总树并按源码证据高亮；保留全部分支和节点ID，区分确认/条件/待确认/未点亮。实际技术缺项先扩充公共总树；2026-09-29补充公式GGX、环境SH、动态SH体积、烘焙方向高光、烘焙/云影、直接AO乘色、负光、发光特效和体素发光收集等通用分类。公共内容不得包含内部案例信息。"
 }
