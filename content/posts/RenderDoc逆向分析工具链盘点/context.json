@@ -1,35 +1,550 @@
 {
-    "rdc_files": [
-    ],
+    "rdc_files": [],
     "code_refs": [
         {
-            "path": "D:/ClaudeProjects/RDC/ShaderSimplify/api.py",
-            "note": "simplify_source 进程内标准入口（MCP/ShaderVarify 共用）"
+            "path": "D:/ClaudeProjects/RDC/_doc/dependency-chain.md",
+            "note": "当前依赖矩阵（auto/manual）和 MCP 归档；Patcher 位于 RDC 内的手写路径已与实际位置不符。",
+            "sha256": "d77bfcefbbeb116ea536151592474f591f34129bb1321edcfd3ce04261c69a21"
         },
         {
-            "path": "D:/ClaudeProjects/RDC/ShaderToolchain/simplify_subprocess.py",
-            "note": "ShaderSimplify 的 subprocess 通道（gen_hlsl/gen_glsl/gen_json，供插件/rdc-cli）"
+            "path": "D:/ClaudeProjects/RDC/_src/gen_dep_matrix.py",
+            "note": "import 依赖扫描、auto 区 gen/check 校验入口。",
+            "sha256": "be06fbe667c633a19128cc30e46bd6969c90d4cae34c72bc04e5a8b9dcb3f45c"
         },
         {
-            "path": "D:/ClaudeProjects/RDC/ShaderToolchain/shader_rename.py",
-            "note": "反射级重命名（2026-08 归一，三消费者共用）"
+            "path": "D:/ClaudeProjects/RDC/_src/bootstrap.py",
+            "note": "resolve_rdc_root、resolve_renderdoc_path、add_to_path；monorepo 锚点与环境变量。",
+            "sha256": "58d7d9d11287f0f2777d0f682005b9119115a4a98c52aa7f54ee49f99908ac2e"
         },
         {
             "path": "D:/ClaudeProjects/RDC/_src/simplify_cli.py",
-            "note": "命令行入口：--list-passes 模式 + stdin JSON 协议"
+            "note": "--list-passes；stdin 首行 JSON + 源码，stdout 源码、stderr 失败。",
+            "sha256": "282491625d8d5d7d01ec6f8c61c9ad705bd0e82a5ac4bce159d41b0d9832028b"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderSimplify/api.py",
+            "note": "simplify_source 进程内标准入口。",
+            "sha256": "11fa30ef97675717f74da13e1271c47290ba49f465e19b27c70b082c59e36de3"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderSimplify/SimplifyEngine.py",
+            "note": "PassDef/registry，pre/convergence/post 与 normalize 预处理、收敛上限、异常 pass 跳过。",
+            "sha256": "7259cd74cae8072f9a0fae08e370ed377363fba04c7c99c5b7e18bea46358bc2"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderSimplify/SimplifyHLSL_AST.py",
+            "note": "HLSL normalize/lerp/smoothstep 与 outline 的注册/匹配能力。",
+            "sha256": "858175a3729499ec17121e9483ef4f35de8bb76a611e23fc7d19509ec153a0f2"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderSimplify/SimplifyGLSL_AST.py",
+            "note": "GLSL 表达式还原和 outline 后处理注册。",
+            "sha256": "bbd3c7a82bf42a87efe5a397217e7e6e7aa74838ca8d32d273a784138666e9b7"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderToolchain/toolchain.py",
+            "note": "外部工具 registry、get_tool_path 的工具专属探测顺序。",
+            "sha256": "4fb921a1a992fba44d7b70c08afa1290f93482390054bda0e23927958719a150"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderToolchain/compilers.py",
+            "note": "compile_to_spirv（glslang/dxc）与 fxc compile_to_dxbc 高层接口/参数。",
+            "sha256": "d28c18d628f2a180c208fc9959c4f9065426d070d0d63a6c8444ac495abf740c"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderToolchain/spirv_cross.py",
+            "note": "spirv-cross stage、目标和 flags。",
+            "sha256": "87feef96aba91826c1bfaace3570ecf8050f86796edde831907e99379e1303a0"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderToolchain/dx_decompile.py",
+            "note": "直接调用 HLSLDecompiler exe；DXBC/DXIL 输入形式和失败处理，不代表 exe 内部流水线。",
+            "sha256": "cc7b295a370e32edd2b527187e738ba71320b0f797faed734baa5b584413469c"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderToolchain/shader_rename.py",
+            "note": "reflection 资源/变量名称重命名，区别于 ShaderRE 语义映射。",
+            "sha256": "c4e03764bc7f30cccef248a6c8b7463b325298a603cc589935f800553e50af47"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderToolchain/simplify_subprocess.py",
+            "note": "独立解释器、RDC_PY312 与 simplify_cli 协议。",
+            "sha256": "db84b20886a6db041d22e81ed9a3004974dc1743d5c37afa6d1acc6e0b51f341"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderToolchain/bindless_heap.py",
+            "note": "无界数组到 SM6.6 heap 访问变换、NonUniformResourceIndex 与 SFI0 feature 判断。",
+            "sha256": "3fde09cba715819f3d70ba420f5c1fe736795aab5ea1bc78d2d072ca18437751"
         },
         {
             "path": "D:/ClaudeProjects/RDC/ShaderVarify/_src/shader_verify.py",
-            "note": "三层 ground-truth 验证（api.simplify_source 调用点）"
+            "note": "texture 与 pixel 不同基线、自检、采样、verdict、float/量化/视觉阈值及 compute 输出比较。",
+            "sha256": "cd6f3de80cac083d5bf33ed6f0239277620d284ecb3eabff265f31aa87842d20"
         },
         {
-            "path": "D:/ClaudeProjects/RDC/RenderdocMCP/mcp/src/renderdoc_mcp/server.py",
-            "note": "11 组工具模块、53 个 @mcp.tool 注册"
+            "path": "D:/ClaudeProjects/RDC/ShaderVarify/_src/rd_capture.py",
+            "note": "原始字节码重注入、Native DX 修复/编译、反射重命名与 UAV 资源输出。",
+            "sha256": "548fe1f90f28b2cdc2b9223d0ff185a7819e0e7485b7be95ed951974c64a5fc4"
         },
         {
-            "path": "D:/ClaudeProjects/RDC/_doc/dependency-chain.md",
-            "note": "依赖矩阵校验真理源（文章 mermaid 图依据）"
+            "path": "D:/ClaudeProjects/RDC/ShaderVarify/_src/pixel_compare.py",
+            "note": "连续网格单元覆盖输出图像，块内逐像素比较；网格数量是分块数，不是单点采样数。",
+            "sha256": "77d6b91bf219e051d0a5f9ac253269ee458cc2337623815a929473d8f603ac20"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderVarify/_src/renderdoc_runtime.py",
+            "note": "直接加载 SDK，不依赖归档 MCP。",
+            "sha256": "945bc08029421098c338fbd94298785c9b6f004661293241b702e0bca4b1f577"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderVarify/tools/harness.py",
+            "note": "texture/pixel/debug CLI 参数、样本和 seed。",
+            "sha256": "3fe7fc82493039a6dd5f0692ff4c16b038a60f950e329e08f2e233ea015c5892"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderVarify/tests/test_golden.py",
+            "note": "无 GPU golden 文本回归，不能证明回放像素正确。",
+            "sha256": "3c2e20325532012502a74ed10be7c971d4bf0dade0d9c0be9fdba200c3d4cb00"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderVarify/tools/quick_verify.py",
+            "note": "需要 capture/RenderDoc 的编译快检。",
+            "sha256": "861f5e9d56c7c44d2796acb5197d6431d8538b1e2bd3ebed06a201a8a6951580"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderVarify/tools/profile_timing.py",
+            "note": "需要打开 capture 的 AST/pipeline 耗时工具。",
+            "sha256": "530b99cee9570631ec6269b1a6ff4a6c21b870db26ca04b1fdded13d77c38104"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderVarify/tools/bench_simplify.py",
+            "note": "已有源码输入的独立化简计时。",
+            "sha256": "4902eb70ff360b5e74250284e1796e141abaae96145cfb0665bd89ed18bc4de9"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/.python-version",
+            "note": "本机工作树 Python 3.12 钉版，区别于通用支持范围。",
+            "sha256": "33307da56af13f791584518fef2e49641180bfbf2ef7b2d256c9ab6fad564f80"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/cli.py",
+            "note": "Click 注册、具名 session 和当前命令面。",
+            "sha256": "3d37582b6e1e1258387f29c305dbdbf3b3226f641e07f01bb1afd4838872a8e5"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/discover.py",
+            "note": "bare import 优先、候选 SDK 子进程探测与发现逻辑。",
+            "sha256": "e2ac46af2b2752837a4688ce2be5fccd58dd5a5c0f6f2629dc61bf88563d6f67"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/commands/mrop/decompile_shader.py",
+            "note": "stage 长名、event、target、simplify 默认与输出参数。",
+            "sha256": "e8181457b3240fc0f38525120ac6341cc6cf88c80e937584caa66a030a6a3722"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/handlers/mrop/decompile_shader.py",
+            "note": "SPIR-V/DXBC/DXIL 分支、HLSL-only DX target、显式化简失败与 monorepo 锚点。",
+            "sha256": "80e365fb5480f1140a9540d9dd19d4bfc563f4010ee82c211f505730ad384990"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/handlers/mrop/assemble_shader.py",
+            "note": "SPIR-V VS/PS 与 ShaderRE 模板装配；不支持任意 DX 转 Unity。",
+            "sha256": "d7acefc234c991c62209f8570dcaed5084ca7393e6d34b884a5537c5e2ed4b7b"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/commands/mrop/validate.py",
+            "note": "六类检查 CLI 参数，不能等同于化简正确性。",
+            "sha256": "0d893b2a01aad40d357fb175a207c5f7c0af26337e2363c4c1765ffe8525cabb"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/handlers/mrop/validate.py",
+            "note": "各完整性检查的实际 API 路径。",
+            "sha256": "3625e01f637511661b7d82dfe4a0eae1395ed9b10681a1add286424705ebbff9"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/handlers/debug.py",
+            "note": "DebugPixel compare、同名变量/最终值/跨寄存器匹配。",
+            "sha256": "07c128fda544bb913e941b7c638550ae39ab8e55185a9af71a899c2dce4efede"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/handlers/script.py",
+            "note": "daemon 内 exec、controller/rd/state 原型脚本。",
+            "sha256": "92b4566f28dc4583e9ba8d900a3cf9e33ad166c6c43c99a947d784a53b7df967"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/services/session_service.py",
+            "note": "close 本地会话会 shutdown；外部连接默认仅撤本地状态，--shutdown 请求关闭远端。",
+            "sha256": "7636570aba0baaebabad3f26e167cd66a8fe4002101073178eb478d804f0e210"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/new_proj.py",
+            "note": "project.json 与映射配置瘦壳模板，BUF_NORMALIZE/LANE_RENAMES 等。",
+            "sha256": "0ac96f7e0b5e6971ef0543911fd9097aa441414a9ac97ad7e23e1935168cd5d4"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/rename_engine.py",
+            "note": "集中语义重命名机械核心，当前 baseline 访问形式约束。",
+            "sha256": "5c02cf1f3f32f31a7edf59cff401f28f3da36cc7bd724ed0983e7aa52f5ba9eb"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/readable_engine.py",
+            "note": "集中可读版重建核心。",
+            "sha256": "ffd7e1548d1523f965264bd36224a5d5b4209338b165084e676fa0db82c8f1e3"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/transcribe.py",
+            "note": "转述分段与装配辅助。",
+            "sha256": "7cd0c135bb463f0f618e44af4630e1f7201ad5951329c20763481fd778396d01"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/project_context.py",
+            "note": "EID/stage baseline SHA-256、verification 记录/初始 BLOCKED/产物 provenance。",
+            "sha256": "72530c71560836ea9f1d27715578be319ae6669c4f4fff6fe30d6f488b80d4b5"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/project_manifest.py",
+            "note": "baseline record/check CLI。",
+            "sha256": "c206dc104e55777d0053034a528703461d66e28b4548fb2e24d90a8c6d4e73b1"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/verify_inject.py",
+            "note": "必填 proj/eid/compare，canary 生效、PSO 日志、baseline 与 target 注入后比较，DXBC canary-source。",
+            "sha256": "92b69a3f76a6260533c6f7e8f4281f5e8260982e58bc70d6b745dcfecd6b1ba6"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/verify_inject_compute.py",
+            "note": "Compute/UAV 注入验证与覆盖证据。",
+            "sha256": "612c531b77ac342ffeadef67f521482fe9dad286bf358e92d1047a130cc0203b"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/gate_dxil.py",
+            "note": "DXIL 产物检查与对应 API 验证入口。",
+            "sha256": "4f0996b9e55eda631a3a595d6085d112d430fc2cdfb5a91ada32abd1f158c791"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/build_dxbc.py",
+            "note": "DXBC 编译及来源记录。",
+            "sha256": "aa3bf67895f67f0b8f0482efe423b2d87349b29cb7891cabc6f5e306119e5e01"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/init_article_semantics.py",
+            "note": "article_semantics 骨架，名称/内容不推断，RT/纹理默认选取。",
+            "sha256": "0a0ff399c3165256b7f4366af00bf13c6b54a65c50bd9dba219e272843d4ac80"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/gen_article_bundle.py",
+            "note": "文章包选择性装配、DDS/sidecar/引用/验证哈希闭合；不重跑 GPU、不普遍 gate PASS。",
+            "sha256": "4d7fb8ca279388f83fa4df64afa0c142b96ae3ff90b27c1b43b84686f77e14a9"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/shader_re_doctor.py",
+            "note": "按任务/API 的环境入口检查，不是 GPU 验证。",
+            "sha256": "e9bee8d1498b6af9d5db88344b509c30705b62062eff10e84d4b62e1f13ddb0e"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/ToUnity/AssembleShader.py",
+            "note": "标记/结构片段装配到 Unity 模板，非自动完整移植。",
+            "sha256": "ee80cd37d8ab35ffe324b51493c53e29744533efa0d2f22ec1d1c3b222d2a9a8"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/ToUnity/URP/export_textures.py",
+            "note": "PS 绑定纹理 TGA/EXR 导出、texture_info.json。",
+            "sha256": "682ea07b9f63b91685a518ee15d4873e98621d9f8b6e5c4903a1dd8c93bee5d6"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/ToUnity/URP/fix_texture_meta.py",
+            "note": "清单驱动 mip/sRGB/尺寸/格式设置，不限 BC7/BC6H。",
+            "sha256": "ba87e1a0d0ef427b6142604575e33444292387fc08b05798ad7136b89693575c"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/ToUnity/URP/gen_unity_shader.py",
+            "note": "Properties/CBUFFER 文本生成，非完整 shader。",
+            "sha256": "ed4e75b5d61b980772f5891fc7571d75fbdcedfacf18efc4fb069782343e54d7"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/ToUnity/URP/urp_verify_fxc.py",
+            "note": "fxc 与 URP/Core include 的编译检查。",
+            "sha256": "7d8c5fe2dac0c577328f7d02514af9c6b1eee524afc4a25d34ee5866b9beddfc"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/ToUnity/URP/urp_verify_dxc.py",
+            "note": "dxc 与 URP/Core include 的编译预检。",
+            "sha256": "0f0850077587b88d3d7d2f5c1b03fdf8823dcb4caf33b61ba0d57818c290b400"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/ToUnity/URP/Template/ShaderRTWindow.cs",
+            "note": "Odin 编辑器窗口模板。",
+            "sha256": "3eabe6285f9d1619fef50700570e8d1f3e247a7c4c4b61314fb7d3d44bc2d129"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/NSightCaptureRDC/_src/nsight_to_cpp.py",
+            "note": "metadata/版本匹配、C++ Capture 生成编译、Vulkan VMA 修复与 renderdoccmd capture。",
+            "sha256": "be999963100f6fa497b7c420add8f6b3c76bfcb38a01bce8ec6f0f4469e70001"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/Build/BuildWHL/_src/build_rdoc.py",
+            "note": "SDK pyd/dll/wheel 构建和导入检查；当前工作树有未提交修改，哈希绑定到本次文件。",
+            "sha256": "18d4a954c8ec8ac2a9a696139f50f2e6070c0db4ac4154a29e5e054b0e4d89ca"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/Build/BuildPyi/_src/generate_stubs.py",
+            "note": "docs/stubgen.py 生成 RenderDoc 存根、GUI pystubs 导入 qrenderdoc 存根。",
+            "sha256": "ea42581f4dec083e5cfc7b1d43d49de2da56fe84da331ba1748b642539ad7b84"
+        },
+        {
+            "path": "D:/Projects/OtherProjects/RenderdocPatcher/_src/renderdoc_patcher.py",
+            "note": "独立仓库当前源码位置；版本定向的字符串/代码块/注入修改与二进制后处理。",
+            "sha256": "2167bdf80630f1d812b9da8cb9de2ec4dd1189f8424e6822b589fcb9bc99a1bb"
+        },
+        {
+            "path": "C:/Users/luobowen01/AppData/Roaming/qrenderdoc/extensions/ExportConstantsBuffer/ShaderExport/GenerateUtils.py",
+            "note": "外部独立插件委托 ShaderToolchain/simplify_subprocess。",
+            "sha256": "bcf2ab3d8bfc93ef2cf59de17030f0c5a633e2846839df48d1b108a6b4edf574"
+        },
+        {
+            "path": "C:/Users/luobowen01/AppData/Roaming/qrenderdoc/extensions/ExportConstantsBuffer/ImageExport/ImageExportMain.py",
+            "note": "GUI texture/buffer/output 导出入口。",
+            "sha256": "f95474f8f8d4e173b222daa2e5b732900c374903a176e1343eb6c3281e8e50aa"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/ShaderRE/_src/bindless_heap.py",
+            "note": "共享 ShaderToolchain bindless 机械核心的 CLI 壳；--cso/SFI0 或 --dxil-ref 判定，避免无界表误改。",
+            "sha256": "50decc421b907dbb9b594b65353dc348b3b6beb0f7f73aaed98f0e167821cdcb"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/commands/mrop/manifest_export.py",
+            "note": "Click manifest_path 原样发RPC，不自动resolve；示例用PowerShell Resolve-Path解析。",
+            "sha256": "f549ec81d41d7c9696ceca3de139dd81d8f8fa16411e12be939396a033677049"
+        },
+        {
+            "path": "D:/ClaudeProjects/RDC/rdc-cli/src/rdc/handlers/mrop/manifest_export.py",
+            "note": "拒绝相对manifest路径；daemon侧读取manifest与解析output_dir。",
+            "sha256": "04b4b7ceffb315235f192d66dd838039d35ec261289119980a2d72ea5f7650d6"
         }
     ],
-    "notes": "2026-08-12 两轮群智核查（swarm）后同步：pass 数 29/40 为 --list-passes 实测，工具分组 11 模块，simplify_subprocess 与 simplify_cli 双视角命名已统一；第二轮核查修正 shader_rename 术语（反射级，语义级为 rename_semantic.py）、Patcher 规则数 170/4、工具表补 hlsl_decompiler 行、端到端图补 SRE 节点等（RDC/_doc/dependency-chain.md 与 RenderdocPatcher/CLAUDE.md 已同步修正）。第三轮核查（2026-08-13，以代码为基准）：73 条陈述 71 证实 / 2 驳斥；已修正 urp_verify_dxc.py 编译目标（SM6.0 出 DXIL）与 flow-reverse-engineering.mmd 中 rename_semantic 的真实 dict 名（MEMBER/ARRAY/ACCESS/RESOURCE_RENAMES + CBUFFER_RENAMES）；rename_semantic.py 拷贝数一条（实测 5 份）经用户决定正文不写拷贝数量数字、改列各工程目录名（endfield-deferred / endfield-transparent / genshin-firmament-glass / genshin-firmament-glass-f20157 / flow-e2e-5999），避免目录增删后数字失真。"
+    "notes": "2026-10-13 按当前本地工作树全面修订：RenderdocMCP 已归档，rdc-cli 为当前分析入口；按源码重写引擎阶段、外部工具发现/调用、验证模式与受限结果、ShaderRE baseline/canary/证据链、Unity 工具边界，并补 BuildWHL/BuildPyi。正文与 mmd 不写固定 pass/工具/规则/耗时统计。相对源码路径用于正文，绝对路径用于本机核查索引。本次未执行 capture/GPU；命令示例核查参数定义，不能作为当前帧测试报告。",
+    "audit": {
+        "date": "2026-10-13",
+        "method": "fact-check-report，按工具域并行只读源码核查，主线程修订正文/图/索引；DSH 与 Workflow 工具在本会话未提供，使用 code-searcher agents 执行限定核查。",
+        "scope": [
+            "index.md 全文",
+            "flow-reverse-engineering.mmd",
+            "context.json 引用索引",
+            "RDC 当前核心源码",
+            "rdc-cli 独立工作树",
+            "qrenderdoc ExportConstantsBuffer 外部工作树",
+            "RenderdocPatcher 外部工作树",
+            "NVIDIA/RenderDoc 官方文档"
+        ],
+        "source_snapshots": [
+            {
+                "repo": "D:/ClaudeProjects/RDC",
+                "head": "ed48cf6ec627aff9973f016013f8e2bd0e3be168",
+                "state": "工作树有未提交修改及无关未跟踪文件；Build/BuildWHL/_src/build_rdoc.py 已有修改。以 code_refs.sha256 绑定实际读取文件，未改动这些源码。"
+            },
+            {
+                "repo": "D:/ClaudeProjects/RDC/rdc-cli",
+                "head": "1a7ca9f9d3aa8957f770015639323844fe17682d",
+                "state": "fork；未跟踪 daemon stderr 日志，核查未改代码。"
+            },
+            {
+                "repo": "D:/Projects/OtherProjects/RenderdocPatcher",
+                "head": "299056860e17443fb63e17adc1e71bb2b01663be",
+                "state": "已有 tracked 修改和 .bak，包括 renderdoc_patcher.py；以文件 sha256 绑定当前实际源码，不把 HEAD 当成干净版本。"
+            },
+            {
+                "repo": "C:/Users/luobowen01/AppData/Roaming/qrenderdoc/extensions/ExportConstantsBuffer",
+                "head": "0286f801837c92ef230944b0f5d9bbb3a4d6377a",
+                "state": "核查时工作树干净；未改动。"
+            }
+        ],
+        "corrections": [
+            {
+                "topic": "架构/归档",
+                "before": "MCP 是当前独立服务层，MCP/CLI 并行",
+                "after": "MCP 已归档；CLI 负责分析，Varify 直接加载 SDK",
+                "refs": [
+                    "_doc/dependency-chain.md",
+                    "ShaderVarify/_src/renderdoc_runtime.py"
+                ]
+            },
+            {
+                "topic": "引擎阶段",
+                "before": "固定 pass 数、所有 pass 无耦合且都在收敛循环",
+                "after": "registry 查证；pre/convergence/post 和 normalize/outline 区分；异常跳过",
+                "refs": [
+                    "ShaderSimplify/SimplifyEngine.py",
+                    "_src/simplify_cli.py"
+                ]
+            },
+            {
+                "topic": "工具路径",
+                "before": "统一 env→PATH→默认",
+                "after": "各工具专用目录探测顺序不同",
+                "refs": [
+                    "ShaderToolchain/toolchain.py"
+                ]
+            },
+            {
+                "topic": "DX 反编译",
+                "before": "Python 显式编排 dxbc2dxil→dxil-spirv→spirv-cross",
+                "after": "高层直接调用 HLSLDecompiler exe；不推断 exe 内部实现",
+                "refs": [
+                    "ShaderToolchain/dx_decompile.py"
+                ]
+            },
+            {
+                "topic": "CLI 边界",
+                "before": "任意 VS+PS 自动转 Unity、validate 全部严格双路径",
+                "after": "assemble 当前处理 SPIR-V；validate 是多类完整性检查",
+                "refs": [
+                    "rdc-cli/src/rdc/handlers/mrop/assemble_shader.py",
+                    "rdc-cli/src/rdc/handlers/mrop/validate.py"
+                ]
+            },
+            {
+                "topic": "会话收尾",
+                "before": "普通 close 一律只撤会话，daemon 常驻",
+                "after": "本地 close 请求关闭；外部连接默认只撤本地状态",
+                "refs": [
+                    "rdc-cli/src/rdc/services/session_service.py"
+                ]
+            },
+            {
+                "topic": "验证范围",
+                "before": "混淆texture分块逐像素与pixel单点采样、自检范围；用PNG体积裁决语义",
+                "after": "texture连续网格块内逐像素比较；pixel坐标采样且无完整重注入自检；依据像素/字节而非文件体积",
+                "refs": [
+                    "ShaderVarify/_src/shader_verify.py",
+                    "ShaderVarify/_src/pixel_compare.py"
+                ]
+            },
+            {
+                "topic": "容差/verdict",
+                "before": "统一容差4且PASS代表绝对一致",
+                "after": "按模式/格式区分阈值，补INJECT_FIDELITY_LIMITED与实际覆盖",
+                "refs": [
+                    "ShaderVarify/_src/shader_verify.py"
+                ]
+            },
+            {
+                "topic": "重命名核心",
+                "before": "每个项目复制完整机械实现，space0普遍不可用",
+                "after": "项目配置瘦壳；共享rename/readable引擎，输入与baseline身份关联",
+                "refs": [
+                    "ShaderRE/_src/new_proj.py",
+                    "ShaderRE/_src/rename_engine.py"
+                ]
+            },
+            {
+                "topic": "产物验证",
+                "before": "零差异即可PASS，省略proj/哈希/canary",
+                "after": "登记EID/stage/SHA-256；canary/PSO生效检查；baseline与target注入后比较",
+                "refs": [
+                    "ShaderRE/_src/project_context.py",
+                    "ShaderRE/_src/verify_inject.py"
+                ]
+            },
+            {
+                "topic": "文章装配",
+                "before": "旧文缺失",
+                "after": "语义骨架、素材选择与引用/哈希闭合；不重跑GPU、不普遍gate PASS",
+                "refs": [
+                    "ShaderRE/_src/init_article_semantics.py",
+                    "ShaderRE/_src/gen_article_bundle.py"
+                ]
+            },
+            {
+                "topic": "Unity",
+                "before": "完整自动移植、gen_unity_shader生成完整shader、面板已跨项目安装",
+                "after": "模板与文本装配/导入工具；算法与引擎数据仍需适配和Unity验证",
+                "refs": [
+                    "ShaderRE/_src/ToUnity/AssembleShader.py",
+                    "ShaderRE/_src/ToUnity/URP/gen_unity_shader.py"
+                ]
+            },
+            {
+                "topic": "Patcher",
+                "before": "RDC内活动目录、清除所有特征、通用规避",
+                "after": "实际为外部独立工作树；指定源码版本的定向修改，无通用保证",
+                "refs": [
+                    "D:/Projects/OtherProjects/RenderdocPatcher/_src/renderdoc_patcher.py"
+                ]
+            },
+            {
+                "topic": "Nsight版本",
+                "before": "2026.1 已统一移除 D3D12 C++ Capture",
+                "after": "官方2026.1标记deprecated/未来移除；本地保守流程与官方定义分开",
+                "refs": [
+                    "NSightCaptureRDC/_src/nsight_to_cpp.py",
+                    "NVIDIA 2026.1 Release Notes"
+                ]
+            },
+            {
+                "topic": "SDK构建",
+                "before": "遗漏Build工具与ABI/源码版运行约束",
+                "after": "补BuildWHL/BuildPyi、3.12本机ABI、SDK发现与monorepo锚点",
+                "refs": [
+                    "Build/BuildWHL/_src/build_rdoc.py",
+                    "Build/BuildPyi/_src/generate_stubs.py",
+                    "rdc-cli/src/rdc/discover.py"
+                ]
+            }
+        ],
+        "limitations": [
+            "没有重新执行 capture/GPU，也没有核验所有已安装 GUI 扩展的启用状态。",
+            "依赖矩阵 manual/详述仍含 Patcher 旧 RDC 内路径；未修改源码仓库文档。",
+            "NSight 本地 AGENTS 的 2026.1 移除表述与官方 deprecated/未来移除有差异；文章优先使用官方定义，并保留本地保守流程的限定说明。",
+            "源码核查描述的是文件实现；运行能力还受本机SDK、GPU、驱动、capture API和外部工具约束。"
+        ],
+        "document_checks": {
+            "status": "passed",
+            "date": "2026-10-13",
+            "tested_files": {
+                "index.md": "13485be1169f6131168d9be2e3ca1dd2414b3eb293d07d45e3d1c80598223561",
+                "flow-reverse-engineering.mmd": "ffb94671b1a53391642743cf6c3b93dcb8279e56ebb257177f35a08a307e8dae"
+            },
+            "checks": [
+                {
+                    "check": "JSON/TOML/Markdown",
+                    "result": "通过；围栏配对、标题结构有效、无手写details或PRIVATE.md禁止代号。"
+                },
+                {
+                    "check": "code_refs",
+                    "result": "所有引用路径存在，SHA-256与源码一致；最终包含manifest-export命令/handler引用。"
+                },
+                {
+                    "check": "Hugo",
+                    "command": "hugo -e development -D -d .tmp-localcheck",
+                    "result": "最终正文和新增引用写入后构建，exit 0。"
+                },
+                {
+                    "check": "浏览器/视觉",
+                    "result": "所有嵌入Mermaid均为SVG，无console/runtime异常或尺寸爆炸；标题、标签、折叠摘要正常；主线程已目视截图，无标签截断。检查后图源未变。"
+                },
+                {
+                    "check": "外链",
+                    "result": "RenderDoc官方GitHub说明、两个NVIDIA ReleaseNotes最终均HTTP 200；NVIDIA在本机Schannel需--ssl-no-revoke，证书校验仍开启。"
+                }
+            ],
+            "gpu_run": false,
+            "cli_runtime_run": false,
+            "notes": "通过的是文档/页面/源码身份检查；没有执行capture/GPU。截图为.tmp-localcheck临时产物。检查代理已关闭自己启动的HTTP服务。"
+        },
+        "second_review": "二轮按实际实现复核，纠正pixel_compare docstring边缘排除说明与网格生成实际连续覆盖的差异；补normalize metadata/runtime时序、HLSL lerp语言范围，流程图按验证器区别canary，明确baseline身份登记并非GPU通过。 CLI 二轮补充manifest绝对路径要求与baseline --file相对cwd规则，均修正示例。"
+    },
+    "web_refs": [
+        {
+            "url": "https://github.com/baldurk/renderdoc/blob/v1.x/docs/how/how_debug_shader.rst",
+            "note": "官方shader调试说明，修正RenderDoc只有抓帧/查看的概括；2026-10-13已打开。"
+        },
+        {
+            "url": "https://archive.docs.nvidia.com/nsight-graphics/2026.1/ReleaseNotes/index.html",
+            "note": "2026.1 C++ Capture D3D12/Vulkan deprecated，future release移除；2026-10-13已打开。"
+        },
+        {
+            "url": "https://docs.nvidia.com/nsight-graphics/ReleaseNotes/index.html",
+            "note": "当前官方Vulkan C++ Capture deprecated提示；2026-10-13已打开。"
+        }
+    ]
 }

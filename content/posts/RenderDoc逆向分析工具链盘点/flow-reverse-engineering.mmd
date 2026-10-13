@@ -1,46 +1,26 @@
 flowchart TD
-    classDef gate fill:#fbcfe8,stroke:#db2777,color:#333
-    classDef act fill:#bbf7d0,stroke:#16a34a,color:#333
-    classDef cli fill:#bfdbfe,stroke:#2563eb,color:#333
-    classDef out fill:#ddd6fe,stroke:#7c3aed,color:#333
+    classDef proc fill:#e1f5fe,color:#000
+    classDef io fill:#fff3e0,color:#000
+    classDef gate fill:#fff9c4,color:#000
+    classDef fix fill:#ffebee,color:#000
+    classDef result fill:#e8f5e9,color:#000
 
-    A0(["capture.rdc + EID"]):::out --> A1
-
-    A1["① 基线像素测试<br/>tools/harness.py pixel --samples 100 --seed 42<br/>输入：capture.rdc + EID<br/>输出：verdict（像素差≤容差4）+ simplified.hlsl 落盘（保真链）"]:::cli --> A1g{像素差 ≤ 容差4?}:::gate
-    A1g -- 否 --> A1f["debug 定位是哪个 pass 引入差异<br/>（simplify-bug-diagnose）"]:::act --> A1
-    A1g -- 是 --> A2
-
-    A1 -. "① 落盘产物（保真链）是<br/>⑤ 改名链的唯一输入<br/>（可读链带 space0 不兼容）" .-> A4
-
-    A2["② 绑定 + 反射<br/>rdc shader --reflect / rdc bindings<br/>输入：EID<br/>输出：cbuffer 清单（名·bind·大小）+ 纹理/UAV 清单"]:::cli --> A25
-    A25["③ 资源名即语义<br/>rdc shader-map / resource / descriptors<br/>输入：EID → shader_id<br/>输出：shader 名 + 每纹理真实资源名·格式·尺寸"]:::cli --> A25b
-    A25b["③.5 导出贴图/RT 素材（视觉证据线前置）<br/>export_resources.py 一条命令（RDC 根执行，任意 cwd 已锚定）：<br/>rt+resource 双格式 rdc 直导 + PNG 钳长边 1024 + 缩略图<br/>DDS = 数值/格式保真线；PNG = 视觉对照线（模型直接 Read 猜语义）<br/>⚠️ 禁 DDS→PNG（texconv 对 legacy 头报 0x80070032）<br/>输入：descriptors tsv + 已开 capture 会话<br/>输出：output/resource/png/*.png + output/rt/*.png"]:::cli --> A25c
-    A25c["③.6 贴图视觉语义（与 ⑤⑥ 并行的证据线）<br/>tex-semantics workflow：5-6 张/组并行读图<br/>+ 汇总 agent 对齐 HLSL 层索引字段<br/>B 型：cbuffer 字段值 + 材质基址加法对位；A 型：白手语义草稿<br/>铁律：猜图 agent 只喂 png 路径 + 元数据；<br/>汇总不读 _doc/semantic_db/article/rename（防抄答案）；<br/>恒值/纯黑 = 占位或捕获帧未写入（置信 ≤0.5 不硬编）<br/>输出：语义重命名表 + group_insights + friction_points<br/>（texsem2article verify/gen ↔ article_semantics.json）"]:::act
-    A25c -. "语义证据与 ④ 运行时值、③ 资源名一起<br/>供 ⑥ 语义分析交叉对照（cb 变量语义为唯一定名依据）" .-> A5
-    A3["④ cbuffer 运行时值<br/>rdc cbuffer --stage ps --set 0 --binding N --json<br/>⚠️ 反射布局≠内存布局——语义对照以 --raw -o 原始字节解码为准<br/>或 gen_semantic_db.py → semantic_db.json 对照数据包<br/>输入：EID + cbuffer 清单<br/>输出：每成员（reflection 名·packoffset·float4 值）"]:::cli --> A4
-    A4["⑤ 取简化 HLSL<br/>改名链：拷 ① 落盘产物 → proj/_generate/simplified.hlsl<br/>（必须——可读链带 space0，与 rename/fxc 不兼容）<br/>阅读用：rdc decompile-shader -s pixel -e &lt;EID&gt;<br/>--simplify --json"]:::cli --> A5
-    A5["⑥ 语义分析<br/>变量名 ↔ ④ 运行时值 ↔ ③ 资源名 ↔ ③.6 视觉语义 交叉对照<br/>输入：proj/_generate/simplified.hlsl（⑤ 拷贝）<br/>+ 运行时值 + 资源名 + 视觉重命名表<br/>输出：rename_semantic.py<br/>（MEMBER/ARRAY/ACCESS/RESOURCE_RENAMES<br/>+ CBUFFER_RENAMES）"]:::act --> A6
-    A6["⑦ 生成重命名 HLSL<br/>rename_semantic.py →<br/>_generate/simplified_renamed_ssa.hlsl<br/>（SSA 版，注入主体）<br/>make_readable.py →<br/>output/simplified_renamed.hlsl（可读版）<br/>输入：proj/_generate/simplified.hlsl + RENAMES<br/>输出：SSA 版 + 可读版两产物"]:::act --> A6g
-
-    A6g{位级闸门<br/>fxc -O0 编译两版<br/>DXBC 哈希一致?}:::gate
-    A6g -- 否 --> A6f["修 make_readable.py 切分<br/>（机械化切分不改指令序列）"]:::act --> A6
-    A6g -- 是 --> A7
-
-    A6 --> A6x
-    A6x["⑥.5 LLM 完全转述（人类可读主交付，可选）<br/>transcribe.py split（切分+in/out 契约）<br/>→ Workflow 全局理解 + N 段并行转述<br/>→ assemble 自动三检（变量名统一/撞名/未声明）<br/>→ output/simplified_transcribed.hlsl（像手写 shader）<br/>输入：可读版 + RENAMES + 语义库 + 分析文档<br/>⚠️ 数学等价底线：mad 保留 / 不动运算顺序"]:::act --> A6xg
-    A6xg{GPU 验证<br/>量化容差 ≤ 4?<br/>（D3D: fxc+verify_inject<br/>Vulkan: dxc+harness）}:::gate
-    A6xg -- 否 --> A6xf["按段数学审查<br/>（LLM 展开错误定位→修段重验）"]:::act --> A6x
-    A6xg -- 是 --> A6xd["转述版交付（与位级版并存）<br/>差异 ~1-4/255 记录为编译器差异"]:::out
-
-    A7["⑧ dxc 编译验证<br/>dxc -spirv -T ps_6_0 -E main -Fo .spv<br/>输入：simplified_renamed.hlsl（可读版）<br/>输出：.spv（仅 Vulkan 注入消费；D3D 流程验证走 fxc DXBC）"]:::cli --> A8
-
-    A8["⑨ 像素注入验证<br/>重注入原始字节码自检 + 注入重命名版对比"]:::gate --> A8g{Vulkan / D3D?}:::gate
-    A8g -- Vulkan --> A8v["tools/harness.py pixel --inject-spv<br/>输入：renamed.spv + capture + EID<br/>输出：逐像素对比 PASS / FAIL"]:::cli
-    A8g -- D3D11/12 --> A8d["verify_inject.py --dxbc 位级注入<br/>输入：renamed_ssa.dxbc（fxc 编译）+<br/>baseline simplified.hlsl 对照<br/>输出：verify_report.json（36 点，新差异分离）<br/>⚠️ --eid 必传；--compare 传 baseline（与改名输入同一份）"]:::cli
-    A8v --> A8g2{PASS?}:::gate
-    A8d --> A8g2
-    A8g2 -- 否 --> A8f["修重命名 / 保真问题"]:::act --> A4
-    A8g2 -- 是 --> A9
-
-    A9["⑩ 绑定完整性<br/>rg register 声明<br/>输入：simplified_renamed.hlsl<br/>输出：register 与原始 DescriptorSet 一致（缺 spaceN 则补）"]:::cli --> A10
-    A10["⑪ 整理产出<br/>⚠️ proj/ 不入 git——产物留工作树（交付 + 留痕 + README）<br/>仅 skill/_src 通用脚本改动才 git commit<br/>收尾：rdc --session &lt;s&gt; close --shutdown<br/>（普通 close 只撤会话，daemon 进程常驻不自退）"]:::out
+    START["capture + API + EID + stage"]:::io --> LOCATE["定位 draw / dispatch<br/>读取 shader、管线与绑定"]:::proc
+    LOCATE --> EVID["cbuffer 原始值、描述符<br/>贴图与 RT / UAV 内容"]:::io
+    LOCATE --> BASE["选择对应 API 的反编译链<br/>化简并检查 baseline"]:::proc
+    BASE --> HASH["登记 baseline<br/>project.json 中记录 EID、stage、SHA-256"]:::proc
+    HASH --> SEM["语义重命名 / 可读化 / 转述<br/>保持绑定、布局与算法约束"]:::proc
+    HASH -. "登记只核对文件身份" .-> COMPARE
+    EVID -. "交叉印证" .-> SEM
+    SEM --> COMPILE["按目标 API 编译<br/>DXBC / DXIL / SPIR-V"]:::proc
+    COMPILE --> PROVE["按对应验证器检查替换生效证据<br/>D3D：canary 与 PSO 错误检查<br/>SPIR-V：覆盖与重注入自检"]:::gate
+    PROVE --> EFFECT{"生效证据充分?"}:::gate
+    EFFECT -- 否 --> BLOCK["FAIL 或 BLOCKED<br/>排查替换、PSO、输出覆盖"]:::fix
+    BLOCK --> COMPILE
+    EFFECT -- 是 --> COMPARE["同一 capture / EID 下运行对应验证器<br/>比较登记的 baseline 与目标结果<br/>记录覆盖、资源、容差与差异"]:::gate
+    COMPARE --> OK{"本次比较通过?"}:::gate
+    OK -- 否 --> REPAIR["定位绑定、编译或改写差异"]:::fix
+    REPAIR --> SEM
+    OK -- 是 --> REPORT["保存报告和产物身份<br/>说明验证覆盖与限制"]:::result
+    REPORT --> ARTICLE["语义清单与文章素材装配<br/>检查文件引用及哈希闭合"]:::result
+    REPORT --> UNITY["Unity 模板装配与算法适配<br/>在 Unity 中再次核对画面"]:::proc

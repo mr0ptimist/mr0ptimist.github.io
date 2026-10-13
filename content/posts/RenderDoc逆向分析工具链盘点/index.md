@@ -1,395 +1,444 @@
 +++
 title = 'RenderDoc 逆向分析工具链盘点'
 date = '2026-08-12T10:00:00+08:00'
+lastmod = '2026-10-13'
 tags = ['RenderDoc', 'Shader', '逆向', '工具链']
 +++
 
-> 从"抓到一帧"到"Unity 里复刻出同样的画面"，中间隔着一整套工具链。这篇文章盘点我日常用的 RenderDoc 生态工具：它们各自解决什么问题、怎么协作、典型工作流长什么样。
+> 从“抓到一帧”到“理解 shader，再在 Unity 中复现”，中间需要查询、反编译、化简、验证和素材整理。这篇文章按当前本地源码盘点各工具的职责、协作方式和能力边界。
 
-## 为什么会有这一堆工具
+本文于 **2026-10-13** 更新。源码与引用索引记录在本文章目录的 `context.json`；文中的源码路径除另有说明外，相对 RDC 根目录。命令、pass 和规则数量以代码实测为准，给出查证入口，不延续旧版文章的固定统计。
 
-RenderDoc 本身只能做一件事：抓帧 + 查看。但"逆向分析一个游戏画面"要做的事远不止这些：
+## 先看当前工具链
 
-- **反编译的 shader 不可读** — SPIR-V 反编译出来的 HLSL/GLSL 又臭又长（编译器产物），需要自动化简
-- **第三方工具散落各处** — spirv-cross、glslang、dxc、fxc、spirv-dis 路径和参数各不一样，需要统一调度
-- **人操作太慢** — 打开 capture、找 draw、看管线状态、导出贴图，重复劳动要自动化（MCP / CLI）
-- **改完东西没把握** — 化简 pass 有没有改变渲染结果？必须逐像素对比验证
-- **某些游戏抓不到帧** — 带反作弊的游戏直接附加 RenderDoc 会被拦；Nsight 独占的 API 场景需要中转
+RenderDoc 自身已经提供回放、管线检查、像素历史、shader 调试与编辑等能力，支持情况取决于 API 和设备。这里的工具链是在其 Replay API 之上，把重复操作、源码变换、验证与产出整理自动化。RenderDoc 的 shader 调试能力可查阅[官方源码中的使用说明](https://github.com/baldurk/renderdoc/blob/v1.x/docs/how/how_debug_shader.rst)。
 
-整套工具（RDC 仓库）按依赖分成四层，自底向上：
+当前最需要纠正的架构认识是：**旧 RenderdocMCP 已归档，rdc-cli 是当前帧分析与自动化入口**。人、脚本和 AI 都可以调用 CLI；ShaderVarify 则在自己的进程中直接加载 RenderDoc SDK。
+
+| 部件 | 当前职责 | 入口或位置 |
+|---|---|---|
+| RenderDoc SDK | capture 回放、资源访问、shader 替换与调试 | `renderdoc` Python 模块 |
+| ShaderSimplify | GLSL/HLSL 源码化简 | `ShaderSimplify/api.py` |
+| simplify_cli | 独立解释器中的化简协议入口 | `_src/simplify_cli.py` |
+| ShaderToolchain | 第三方编译/反编译工具调度、共享源码变换 | `ShaderToolchain/` |
+| qrenderdoc 扩展 | GUI 内导出、绑定与调试辅助 | `%APPDATA%/qrenderdoc/extensions/`，外部目录 |
+| rdc-cli | 帧查询、导出、调试、shader 替换、断言、远程会话 | `rdc-cli/`，独立 fork 仓库 |
+| ShaderVarify | 化简前后回放结果比较与差异定位 | `ShaderVarify/tools/harness.py` |
+| ShaderRE | 语义重命名、注入验证、素材/文章装配、Unity 模板工具 | `ShaderRE/_src/` |
+| NSightCaptureRDC | 通过 C++ Capture 回放中转支持的 Nsight capture | `NSightCaptureRDC/_src/nsight_to_cpp.py` |
+| BuildWHL / BuildPyi | 构建 SDK wheel 与类型存根 | `Build/BuildWHL/`、`Build/BuildPyi/` |
+| RenderdocPatcher | 针对指定 RenderDoc 源码版本的改名与定向补丁 | 独立仓库，当前位于 RDC 外 |
+| RenderdocMCP | 历史能力来源与追溯材料 | `_retired/RenderdocMCP_20260929/`，已归档 |
+
+### 依赖与工作流是两种图
+
+下面画的是**依赖方向**：箭头从消费者指向被依赖模块。实线表示直接 import；虚线表示按需/回退 import、子进程或环境依赖。依赖矩阵 auto 区由 `_src/gen_dep_matrix.py` 扫描 import 生成，manual 区手工维护；矩阵是仓库的校验入口，图仅作阅读辅助。
 
 ```mermaid
-graph TD
+flowchart TD
     classDef foundation fill:#fff7ed,color:#000
     classDef bridge fill:#e1f5fe,color:#000
-    classDef service fill:#f3e5f5,color:#000
     classDef app fill:#e8f5e9,color:#000
 
-    subgraph F["Layer 0 · 基础"]
-      rd["RenderDoc 本体（外部依赖）"]
-      rdcrack["RenderDoc_Crack<br/>改名构建用源码"]
-      ss["ShaderSimplify<br/>简化引擎（零 RenderDoc 依赖）"]
-      s_cli["simplify_cli<br/>_src 命令行入口"]
+    subgraph F["基础"]
+      RD["RenderDoc SDK"]:::foundation
+      SS["ShaderSimplify"]:::foundation
+      SC["simplify_cli"]:::foundation
     end
-    subgraph B["Layer 1 · 桥接"]
-      ext["qrenderdoc 插件<br/>GUI 侧扩展"]
-      tc["ShaderToolchain<br/>第三方工具统一调度"]
-      cli["rdc-cli<br/>文本流 CLI"]
+    subgraph B["桥接与入口"]
+      TC["ShaderToolchain"]:::bridge
+      CLI["rdc-cli"]:::bridge
+      EXT["qrenderdoc 扩展"]:::bridge
     end
-    subgraph S["Layer 2 · 服务"]
-      mcp["RenderdocMCP<br/>MCP Server"]
+    subgraph A["验证与产出"]
+      SV["ShaderVarify"]:::app
+      RE["ShaderRE"]:::app
+      NS["NSightCaptureRDC"]:::app
     end
-    subgraph A["Layer 3 · 应用"]
-      sv["ShaderVarify<br/>正确性验证"]
-      sre["ShaderRE<br/>逆向产出 + Unity 移植"]
-      nsight["NSightCaptureRDC<br/>抓帧中转"]
-      patcher["RenderdocPatcher<br/>改名构建版"]
-    end
-    sv --> ss & tc & mcp
-    mcp --> ss & tc & rd & sre
-    sre -.-> cli
-    cli -.-> rd
-    cli -.-> tc
-    cli -.-> ss
-    cli -.-> sre
-    s_cli --> ss
-    ext -.-> s_cli
-    ext -.-> ss
-    ext -.-> tc
-    nsight -.-> rd
-    patcher -.-> rdcrack
 
-    class rd,rdcrack,ss,s_cli foundation
-    class ext,tc,cli bridge
-    class mcp service
-    class sv,sre,nsight,patcher app
+    SC --> SS
+    CLI --> TC
+    CLI -.-> RD
+    CLI -. "assemble 按需导入" .-> SS
+    CLI -. "assemble 按需导入" .-> RE
+    EXT -. "环境路径" .-> TC
+    EXT -. "子进程" .-> SC
+    SV --> SS
+    SV --> TC
+    SV -.-> RD
+    RE --> TC
+    RE --> RD
+    RE -. "子进程" .-> CLI
+    NS -. "renderdoccmd" .-> RD
 ```
 
-> 图例：实线 = code import（solid）；虚线 = runtime / fallback / env 依赖。依赖关系以 `_doc/dependency-chain.md` 为校验真理源（由 `gen_dep_matrix.py` 自动生成），本图仅供阅读。
+这不是严格单向的层级树：rdc-cli 的 assemble 能力会按需导入 ShaderRE，ShaderRE 的验证脚本又会通过子进程调用 CLI。前者只涉及对应命令，不能理解为所有 CLI 查询都需要整套产出工具。
 
-| 层 | 工具 | 一句话用途 |
-|---|---|---|
-| 0 基础 | ShaderSimplify | 反编译 shader 的自动化简引擎 |
-| 0 基础 | simplify_cli | ShaderSimplify 的 subprocess CLI 入口（stdin JSON → stdout） |
-| 1 桥接 | ShaderToolchain | spirv-cross / dxc / fxc 等工具统一调度 |
-| 1 桥接 | qrenderdoc 插件 | GUI 侧扩展（导出链等），插件 → MCP → CLI 演进源头 |
-| 1 桥接 | rdc-cli | 把 .rdc 变成 grep 友好的文本流 |
-| 2 服务 | RenderdocMCP | 让 AI 通过 MCP 协议操作 RenderDoc |
-| 3 应用 | ShaderVarify | 化简正确性的像素级验证 harness |
-| 3 应用 | ShaderRE | 逆向产出 + 移植到 Unity 的完整流水线 |
-| 3 应用 | NSightCaptureRDC | Nsight C++ Capture → .rdc 中转 |
-| 3 应用 | RenderdocPatcher | 改名编译版 RenderDoc（反作弊场景） |
+外部 Patcher 和 SDK 构建工具不挤进这张核心依赖图。当前依赖文档仍有 Patcher 位于 RDC 内的旧路径说明；本文按实际独立仓库核查它，不把旧路径当成当前可执行入口。
 
-## 端到端一图流
+### 端到端工作流
 
-把整条链"串起来"看——从游戏帧到 Unity 可复刻画面，共六个阶段。实线 = ①-⑤ 跨阶段数据/工作流，或 ⑥ 支撑层的 code import；虚线 = runtime / fallback 依赖：
+这张图的箭头表示数据和工作推进方向。验证失败应回到对应环节，不会因为生成了 HLSL 或 Unity 模板就自动完成逆向。
 
 ```mermaid
-flowchart LR
-  %% ===== 图层配色 =====
-  classDef acq fill:#fde68a,stroke:#d97706,color:#333
-  classDef acc fill:#bfdbfe,stroke:#2563eb,color:#333
-  classDef pro fill:#bbf7d0,stroke:#16a34a,color:#333
-  classDef ver fill:#fbcfe8,stroke:#db2777,color:#333
-  classDef out fill:#ddd6fe,stroke:#7c3aed,color:#333
-  classDef sup fill:#f1f5f9,stroke:#64748b,color:#333
-  classDef src fill:#fff7ed,stroke:#ea580c,color:#333
+flowchart TD
+    classDef proc fill:#e1f5fe,color:#000
+    classDef io fill:#fff3e0,color:#000
+    classDef gate fill:#fff9c4,color:#000
+    classDef result fill:#e8f5e9,color:#000
 
-  subgraph A["① 抓帧 · 游戏帧怎么变成 .rdc"]
-    GAME["游戏帧"]:::src
-    RD["RenderDoc 直接抓"]:::acq
-    NS["NSightCaptureRDC<br/>Nsight 独占场景 → C++ Capture 中转"]:::acq
-    PAT["RenderdocPatcher<br/>改名构建版 · 反作弊场景"]:::acq
-    RDC[".rdc capture"]:::acq
-    GAME --> RD
-    GAME --> NS
-    GAME --> PAT
-    RD --> RDC
-    NS --> RDC
-    PAT --> RDC
-  end
-
-  subgraph B["② 分析 · 人 / AI 读帧的入口"]
-    MCP["RenderdocMCP<br/>MCP server · AI 代理直接操作"]:::acc
-    CLI["rdc-cli<br/>文本流 CLI · grep / jq / 脚本"]:::acc
-    RDC --> MCP
-    RDC --> CLI
-  end
-
-  subgraph C["③ 反编译 + 化简 · 不可读 → 可读"]
-    DECOMP["spirv-cross / HLSLDecompiler 反编译<br/>(经 ShaderToolchain 调度)"]:::pro
-    SIM["ShaderSimplify 化简<br/>29 GLSL + 40 HLSL pass"]:::pro
-    MCP --> DECOMP
-    CLI --> DECOMP
-    DECOMP --> SIM
-  end
-
-  subgraph D["④ 验证 · 质量闸门"]
-    VAR["ShaderVarify harness<br/>original → 重注入自检 → builtin → simplified<br/>三层逐像素对比"]:::ver
-    SIM --> VAR
-  end
-
-  subgraph E["⑤ 产出 · 分析结果收口"]
-    SRE["ShaderRE<br/>逆向产出 + Unity 移植"]:::out
-    REN["shader_rename（ShaderToolchain）<br/>SPIR-V 反射级重命名"]:::out
-    ASM["AssembleShader<br/>组装进 Unity 模板"]:::out
-    URP["ToUnity / URP 工具链<br/>贴图导出 · meta 修复 · fxc/dxc 验证 · ShaderRT 面板"]:::out
-    UNITY["Unity 可复刻画面"]:::out
-    VAR --> SRE --> REN --> ASM --> URP --> UNITY
-  end
-
-  subgraph F["⑥ 支撑 · 为什么独立成件"]
-    TC["ShaderToolchain<br/>第三方 shader 工具统一调度<br/>(路径三段式 + 参数构造)"]:::sup
-    SCLI["simplify_cli<br/>_src 命令行入口<br/>(py -3.12 + treesitter)"]:::sup
-    VAR --> SIM
-    VAR --> TC
-    VAR --> MCP
-    MCP --> TC
-    MCP --> SIM
-    MCP --> SRE
-    CLI -. fallback .-> TC
-    CLI -. fallback .-> SIM
-    CLI -. fallback .-> SRE
-    SCLI --> SIM
-  end
+    CAP["抓帧或兼容的 Nsight 中转"]:::proc --> RDC["capture.rdc"]:::io
+    RDC --> READ["rdc-cli / qrenderdoc<br/>定位 EID、shader、绑定和资源"]:::proc
+    READ --> DEC["ShaderToolchain 反编译<br/>按 API 选择目标与编译链"]:::proc
+    DEC --> SIM["ShaderSimplify 化简"]:::proc
+    SIM --> BASE["ShaderVarify 基线与差异检查"]:::gate
+    BASE --> SEM["ShaderRE 语义分析与重命名<br/>登记 baseline 与产物身份"]:::proc
+    READ --> EVID["cbuffer、描述符、贴图与 RT 证据"]:::io
+    EVID --> SEM
+    SEM --> VERIFY["编译、注入生效与结果比较"]:::gate
+    VERIFY --> ART["素材清单与文章装配"]:::result
+    VERIFY --> PORT["Unity 模板、贴图导入与算法适配"]:::proc
+    PORT --> UNITY["Unity 中再次验证画面"]:::gate
 ```
 
-> 图例：①-⑤ 跨阶段实线 = 数据/工作流；⑥ 支撑层实线 = code import；虚线 = runtime / fallback 依赖。依赖关系以 `_doc/dependency-chain.md` 为校验真理源，本图仅供阅读。
+## ShaderSimplify：把反编译源码变得可读
 
-### 为什么这么组织
+ShaderSimplify 是 Python 源码化简引擎，支持 GLSL/HLSL，使用 tree-sitter 后端，**不依赖 RenderDoc**。典型变换包括常量折叠、内联、无效写入消除、swizzle 清理、GLSL/HLSL 各自支持的 normalize / smoothstep 形态还原、HLSL 的 lerp 还原，以及重复代码块提取。
 
-- **① 抓帧拆成三个工具**：抓帧手段因场景而变——普通游戏 RenderDoc 直抓；Nsight 独占 API 的游戏要 C++ Capture 中转；带反作弊的游戏要用改名构建版。三件事互不干扰，拆开各自维护。
-- **② 分析双入口**：MCP（给 AI 代理）和 CLI（给人 / 脚本）操作的是同一套 RenderDoc API，只是接口形态不同。AI 适合交互式探索，CLI 适合可复现的批处理，两条线并存。
-- **③ 反编译与化简分离**：spirv-cross 是外部工具，能力边界固定；化简是自研算法，迭代频繁。混在一起的话，每次升级 spirv-cross 都会拖累化简逻辑。
-- **④ 验证独立成质量闸门**：化简 pass 是整套工具链中改动最频繁的部分，每改一个 pass 都可能悄悄改变渲染结果。像素级对比必须独立成闸门，谁改谁负责过闸。
-- **⑤ 产出收口**：分析结果（重命名 shader、贴图、导入设置）统一由 ShaderRE 落盘，并直通 Unity 移植——避免每次逆向完都要手写一遍搬运代码。
-- **⑥ 支撑件独立**：ShaderToolchain 把 spirv-cross/dxc/fxc 等第三方工具的路径与参数统一管理，消费者不用各自写一遍；simplify_cli 是给插件侧走 subprocess 的桥（py -3.12 + treesitter），不独立的话插件侧无法复用化简引擎。
+这些变换识别的是实现中支持的表达式形态；发现一个数学上类似的表达式，不等于一定会触发同一 pass。
 
-## Layer 0 · 基础
+### 执行阶段与入口
 
-### ShaderSimplify — shader 化简引擎
+引擎按 pre、convergence、post 阶段组织 pass；normalize 还在收敛前单独处理，outline 属于后处理。normalize 的 registry 标签仍是 convergence，引擎会将其提前执行，因此 metadata 标签与实际时序要分别看。收敛阶段反复执行已启用的 pass，源码稳定或达到轮数上限时退出。pass 有执行顺序；异常 pass 会警告并跳过，不能把“引擎返回了结果”直接等同于“全部变换成功且语义保持”。
 
-**用途**：把 spirv-cross 反编译出来的"机器风格"shader 化简成可读代码。这是整个逆向工作流的地基——看不懂化简后的 shader，后面的一切（抄算法、移植）都无从谈起。
+进程内标准入口是 `ShaderSimplify.api.simplify_source`，ShaderVarify 使用它。纯 CLI 则由 `_src/simplify_cli.py` 取得引擎并执行。rdc-cli 的 assemble handler 仍有包级导入路径。旧版文章中“入口有几处、流水线有几份”的统计不再沿用。
 
-**核心能力**：
+在 RDC 根目录查当前 registry：
 
-- 纯 Python 算法引擎，**零 RenderDoc 依赖**，GLSL + HLSL 双语言
-- 29 个 GLSL pass + 40 个 HLSL pass 全量启用（`simplify_cli --list-passes` 实测 2026-08-12），tree-sitter AST 后端
-- 覆盖 constant folding、inline、dead-store 消除、swizzle 清理、outline 重复块、normalize / lerp / smoothstep 逆向还原等
-- pass 间无耦合，统一收敛循环跑全部 pass，每轮比字节，不变则退出
-- 典型效果（历史单例实测）：把 753 行的 frag_main 函数体 inline 后，shader 从 1099 行降到 872 行
+```powershell
+python _src/simplify_cli.py --list-passes
+```
 
-**被谁用**：进程内消费者（2026-08-12 审计）——ShaderVarify 与 RenderdocMCP 走 `ShaderSimplify/api.py::simplify_source`（设计上的进程内标准入口），但尚未完全统一：`simplify_cli.py` 直连 `SimplifyEngine`、rdc-cli 的 assemble-shader 从包根 import、ShaderVarify 另调私有 `_ensure_backends_loaded()`，共 4 处入口并存。qrenderdoc 插件（内嵌 3.6 无法 import 引擎）经 `ShaderToolchain/simplify_subprocess.py` 的 subprocess 通道调 simplify_cli。
+列表包含语言、阶段、启用状态与 risky 标记，是了解当前 pass 集合的入口。
 
-**配套 CLI**（仓库根 `_src/simplify_cli.py`）：stdin JSON 协议输入源码 + 配置，stdout 输出化简结果。插件侧（qrenderdoc 嵌入环境无法直接 import 引擎）经 `ShaderToolchain/simplify_subprocess.py`（`gen_hlsl` 等）走 subprocess 调 `py -3.12` 跑这个 CLI（treesitter 后端）。**simplify_subprocess 与 simplify_cli 是同一 subprocess 通道的两个视角**：前者是 ShaderToolchain 的封装入口（反编译 + 化简 + 写文件），后者是 `_src` 的纯命令行（stdin JSON → stdout 源码）。
+### 插件为什么需要独立进程
 
-## Layer 1 · 桥接
+qrenderdoc 的内嵌 Python 环境与化简引擎所用解释器不同。插件通过 `ShaderToolchain/simplify_subprocess.py` 调独立 Python，避免在 GUI 进程中直接加载 tree-sitter 等依赖。
 
-### ShaderToolchain — 第三方 shader 工具统一调度
+协议是 **stdin 首行 JSON 配置，余下内容为源码；stdout 输出化简源码**。失败信息写 stderr，并以非零退出码返回。插件可用 `RDC_PY312` 指定解释器；未指定时封装会尝试查找。这里的 `simplify_subprocess` 是调用方封装，`simplify_cli` 是被调用的独立进程入口。
 
-**用途**：统一管理第三方 shader 工具（spirv-cross、dxc、fxc 等）的路径解析和调用，避免每个项目各自写一遍。
+源码依据：`ShaderSimplify/SimplifyEngine.py`、`SimplifyHLSL_AST.py`、`SimplifyGLSL_AST.py`、`api.py` 与 `_src/simplify_cli.py`。
 
-| 工具 | 用途 |
+## ShaderToolchain：统一工具调用与共享变换
+
+ShaderToolchain 集中管理工具发现、stage 名翻译、参数构造和部分调用封装；DX 反编译入口另有直接 subprocess 调用。它不 import ShaderSimplify 引擎；化简由独立进程协议连接。
+
+| 工具或模块 | 实际用途与边界 |
 |---|---|
-| spirv-cross | SPIR-V → HLSL / GLSL / JSON 反射反编译 |
-| shader_rename | 反射级重命名：基于 RenderDoc reflection 把 spirv-cross 变量名改回可读名（2026-08 归一至 ShaderToolchain；实际使用方为 ShaderVarify / MCP 两家，ShaderRE 本地副本已删） |
-| simplify_subprocess | ShaderSimplify 的 subprocess 通道：反编译 → 化简 → 写文件（内部调 `_src/simplify_cli.py`；供无法 import 引擎的插件/rdc-cli） |
-| glslangValidator | GLSL/HLSL → SPIR-V 编译 |
-| dxc | HLSL → SPIR-V 编译（DXC 后端） |
+| spirv-cross / `spirv_cross.py` | SPIR-V → HLSL、GLSL 或 JSON 反射 |
+| glslangValidator / `compilers.py` | 回编译 SPIR-V 的一个后端 |
+| dxc / `compilers.py` | `-spirv` 路径编译 HLSL → SPIR-V；其他调用方也用 dxc 编译 DXIL |
+| fxc / `compilers.py` | SM5 HLSL 编译、汇编输出等本地检查 |
 | spirv-dis | SPIR-V 反汇编 |
-| fxc | HLSL → DXBC 编译（D3D11 SM5.0，手写 shader 本地验证链） |
-| hlsl_decompiler | DXBC/DXIL → dxbc2dxil → dxil-spirv → SPIR-V → spirv-cross → HLSL 完整链（DXBC/DXIL 专用，双路径） |
-| dxbc2dxil | DXBC → DXIL 转换（半成品：无默认路径、无高层 API，实际用于 ShaderVarify / rdc-cli 反编译链） |
-| dxil-spirv | DXIL → SPIR-V 转换（半成品同上，与 DXBC 无关） |
+| HLSLDecompiler / `dx_decompile.py` | 接收 DXBC 或 DXIL 字节，直接调用外部 exe 返回 HLSL |
+| dxbc2dxil、dxil-spirv | 已注册的外部工具路径；注册本身不代表高层入口逐步调用它们 |
+| `shader_rename.py` | 基于 RenderDoc reflection 的资源与变量重命名 |
+| `simplify_subprocess.py` | 反编译/化简相关封装与独立进程化简通道 |
+| `bindless_heap.py` | 无界数组与 SM6.6 descriptor heap 索引相关的源码变换和特征判断 |
 
-路径解析统一三段式：`环境变量 → PATH → 默认路径`（spirv-dis 额外查 Vulkan SDK，dxc 额外查 LOCALAPPDATA，fxc 默认 Windows Kits 最新版）。环境变量沿用旧命名（`SPIRV_CROSS_PATH`、`GLS_VALIDATOR_PATH`、`DXC_PATH` 等）；统一 `SHADERTOOL_*` 前缀仍在规划中，未在代码实现。
+### 路径发现不是统一三段式
 
-零 ShaderSimplify 依赖（只有标准库），被 ShaderVarify 和 RenderdocMCP 直接 import。
+环境变量有最高优先级，但各工具还有专用探测路径。例如 spirv-dis 会查 Vulkan SDK，dxc 会查 LOCALAPPDATA/Vulkan SDK，fxc 会查 Windows Kits，HLSLDecompiler 会查包内和插件目录。这些探测可能先于 PATH，最后才轮到配置默认值。
 
-**反编译双目标**：spirv-cross 反编译按用途分成两种——**保真反编译**（`shader_model50` + rename/auto_binding/relax_nan 全关，供 ShaderVarify 隔离 pass 噪声，`DECOMPILE_MISMATCH` verdict 就是针对它设计）与**可读反编译**（`shader_model60` + rename 开，供导出）。
+现有环境变量包括 `SPIRV_CROSS_PATH`、`GLS_VALIDATOR_PATH`、`DXC_PATH`、`FXC_PATH` 等，具体工具和解析顺序以 `toolchain.py` 的 registry 与 `get_tool_path` 为准。
 
-### qrenderdoc 插件 — GUI 侧扩展生态
+### 编译目标必须区分
 
-qrenderdoc 的插件目录（`%APPDATA%\qrenderdoc\extensions\`）维护着配套 GUI 扩展：ExportConstantsBuffer（含 ImageExport 贴图导出，贴图/shader 导出链，RenderdocMCP 的 decompile_shader 与贴图导出能力源头）、DrawcallTimer、FrameAnalyzer（draw 统计）、NvPerfAnalyzer（NVIDIA 性能计数器）、RDCUtils（工具集）、renderdoc_mcp_bridge（socket 桥）。整体演进关系是 **插件 → MCP → CLI**：GUI 里的能力先以插件形态验证，再沉淀进 MCP 工具面，最终下沉为 CLI 命令。
+`compile_to_spirv` 的 dxc 后端会加 `-spirv`，并按 stage 选择 SM6 profile；`compile_to_dxbc` 使用 fxc 的 SM5 profile。URP 的 dxc 预检又是另一条路径，不能只看到“dxc”就断言输出一定是 SPIR-V。
 
-### rdc-cli — 把 .rdc 变成文本流
+DX 反编译的 Python 高层入口实际调用 `HLSLDecompiler.exe`，以 `-dxbc` 或 `-dxil` 指定输入形式。当前这段 Python 源码没有显式编排“dxbc2dxil → dxil-spirv → spirv-cross”；exe 内部实现不能用这段调用代码代替证据。
 
-**用途**：上游项目（BANANASJIM/rdc-cli）的口号是"Turn RenderDoc captures into Unix text streams"——让 .rdc 内容可以被 grep / awk / sort / jq 和 AI agent 消费。本地的 fork 在此基础上把 RenderdocMCP 的差异化能力移植成 CLI 形态。
+反编译参数也要按目的选：验证链尽量减少额外变换；阅读与导出链可能启用重命名或不同 shader model。**反编译成 HLSL 不代表可无条件重新编译并替换原 shader**，绑定、输入布局、编译目标和浮点行为都需要检查。
 
-**架构**：Click CLI + JSON-RPC over TCP daemon，daemon 持有 ReplayController。一条命令 = 一个 JSON-RPC 调用，输出 TSV/JSON。
+源码依据：`ShaderToolchain/toolchain.py`、`compilers.py`、`spirv_cross.py`、`dx_decompile.py`、`shader_rename.py`、`bindless_heap.py`。
 
-**本地方案在 fork 上新增的能力**：
+## rdc-cli：当前帧分析与自动化入口
 
-- `manifest-export` — 按 manifest JSON 批量导出贴图
-- `decompile-shader` — SPIR-V / DXBC / DXIL → HLSL/GLSL + 化简（走 ShaderToolchain；DX 链 = HLSLDecompiler 编排 dxbc2dxil → dxil-spirv → spirv-cross，与 ShaderVarify 同源；DX 仅支持 hlsl target；simplify 开启时失败即报错 -32001 + 原因，不静默降级）
-- `assemble-shader` — VS+PS → Unity .shader
-- validation 套件（6 个）— event / pixel / resource / vertex-output / cbuffer / capture 双路径交叉验证
-- `debug compare <eid_a> <eid_b> X Y` — 两个 draw 同像素的执行 trace 逐值对比（daemon 侧读寄存器状态，不会像 stdout TSV 那样错位）
-- `debug pixel --trace` — 单 draw 完整执行 trace
-- `rdc script` — escape hatch：exec 无沙箱脚本，直接访问 controller，快速原型用
+本地 rdc-cli 是 BANANASJIM/rdc-cli 的 fork。它采用 Click 客户端和 TCP JSON-RPC daemon；daemon 持有 ReplayController，需要 capture 数据的命令通过 RPC 查询或操作回放。输出形式包括 TSV、JSON、trace 和导出文件。
 
-> 注：`debug pixel --trace` 与 `rdc script` 两项继承自上游 BANANASJIM/rdc-cli（上游 PR #59 / #45），其余为本地新增。
+### 先用源码版，并管理好会话
 
-**典型调试场景**：手写 shader 移植自 ShaderGraph，用 `rdc shader-eids` 找 draw → `rdc rt` 导出渲染目标 → `rdc debug compare` 逐值对比找首个分歧 → `rdc shader <eid> ps --target DXBC` 反汇编对比结构。
+当前 fork 的 MROP handler 会查找 RDC monorepo 的 `_doc/dependency-chain.md` 锚点，再加载 `_src.bootstrap`。因此这里使用**源码版 `uv run rdc`**；单独 pip 安装的 site-packages 快照不能代表这套工作树，且可能缺少 monorepo 锚点。
 
-## Layer 2 · 服务
+以下示例在 RDC 的 `rdc-cli` 目录执行。capture、EID、资源 ID 与坐标均需替换成自己的输入：
 
-### RenderdocMCP — 让 AI 操作 RenderDoc
-
-**用途**：FastMCP 实现的 MCP server（fork 自 Linkingooo/renderdoc-mcp），让 Claude 等 AI 代理通过 MCP 协议直接操作 .rdc capture：开帧、列 draw、读管线状态、导出贴图、反编译 shader、像素历史、性能分析。
-
-**工具分组**（11 个模块，53 个工具，2026-08-12 实测）：
-
-- session — 开/关/列 capture（fork 新增**多 capture 并发**，上游只有单例）
-- event — draw 列表 / 搜索 / 定位
-- pipeline — 管线状态 / 绑定 / 输入布局 / draw 状态
-- resource — 纹理 / buffer / 资源列表
-- data — 保存贴图（导出规范化：sidecar JSON / flip_y / 全切片 DDS）/ buffer / 导出 mesh / 读像素 / manifest 批量导出
-- shader — 反汇编 / 反射 / cbuffer 内容
-- shader_export — decompile_shader / export_shader_params（cbuffer 参数提取分类）/ assemble_unity_shader
-- advanced — pixel history / post-VS / draw diff / debug pixel
-- validation — event / pixel / resource / vertex-output / cbuffer / capture 双路径交叉验证（rdc-cli validation 套件即移植自此）
-- performance — pass timing / overdraw / bandwidth / state changes
-- diagnostic — negative / precision / 反射 / mobile 风险
-
-**fork 差异化能力**：
-
-- `decompile_shader` — DXBC / DXIL / SPIR-V → HLSL/GLSL（SPIR-V → HLSL 路径经 ShaderSimplify 化简；DXBC/DXIL 走外部 HLSLDecompiler 直出；大 shader 支持分段查看）
-- 贴图导出规范化 — 自动 sidecar JSON 元数据、`flip_y` 选项、cubemap/array/3D 全切片导出到一个 DDS
-- `export_textures_from_manifest` — 按 manifest 批量导出
-- 修复了上游 4 个 PipeState API 调用 bug（blend / depth / stencil / rasterizer 全丢）
-
-**配套 skills**：`analyze-rdc-all`（全量分析）、`analyze-rdc-overview`（管线总览 + GBuffer 布局 + Mermaid 流程图）、`analyze-rdc-feature`（单渲染特性深挖 + shader 落盘）、`analyze-rdc-performance`（性能报告 + 风险分级）、`simplify-shader-rule`（开发新化简规则的交互循环）、`simplify-bug-diagnose`（定位哪个 pass 引入像素差异）。
-
-## Layer 3 · 应用
-
-### ShaderVarify — 化简正确性的像素级验证
-
-**用途**：验证"shader 经过全部化简 pass 后，渲染结果是否逐像素一致"——这是化简引擎的质检站，也是整个工具链最硬核的部分。
-
-**三层 ground-truth 设计**（2026-07-31 起）：
-
-```text
-RenderDoc Capture (.rdc)
-  ├─ original.png        未注入的原始渲染（绝对基准）
-  ├─ orig_injected.png   重注入原始字节码，必须 == original（注入机制自检）
-  └─ SPIR-V ─spirv-cross→ builtin ────→ simplified
-              builtin.png ←—— 逐像素对比 ——→ simplified.png
+```powershell
+uv run rdc doctor
+uv run rdc --session article open .\capture.rdc
+uv run rdc --session article info
+uv run rdc --session article events
+uv run rdc --session article draws
+uv run rdc --session article goto 123
+uv run rdc --session article pipeline --json
+uv run rdc --session article bindings --json
+uv run rdc --session article descriptors 123
+uv run rdc --session article close
 ```
 
-`builtin vs simplified` 只是相对对比，可能两边一起错，所以强制渲染未注入的 original 基准，并重注入原始字节码自检注入机制：
+具名 session 用来区分独立回放会话，后续每条命令要使用同一名字。普通本地会话的 `close` 会请求关闭自己的 daemon；连接外部 daemon 的会话默认只撤销本地连接状态，显式 `--shutdown` 才请求关闭外部 daemon。旧流程图“普通 close 一律留下 daemon”的说明已不适用。
 
-| 结果 | 含义 |
+当前还有 remote、Android、`--proxy` 回放和 `--connect` / `--listen` 连接模式，具体参数查对应 `--help`。它们解决捕获与回放位置的问题，不能替代 shader 的 API 兼容性验证。
+
+### 查询、导出、调试与替换
+
+| 需求 | 代表命令 |
 |---|---|
-| `INJECT_ERROR` / `INJECT_MISMATCH` | 注入机制坏了（不该发生） |
-| `DECOMPILE_MISMATCH` | 反编译/重编译保真度问题（pass 无关） |
-| `COMPARE_FAIL` | 某个化简 pass 引入了差异 |
-| `PASS` | 三层全过 |
+| 找 draw / shader | `events`、`draws`、`shaders`、`shader-map`、`shader-eids` |
+| 看管线、绑定、参数 | `pipeline`、`bindings`、`descriptors`、`cbuffer` |
+| 看资源与虚拟路径 | `resources`、`resource`、`ls`、`cat`、`tree` |
+| 导出素材 | `texture`、`rt`、`buffer`、`manifest-export` |
+| shader 调试 | `debug pixel`、`debug vertex`、`debug thread`、`debug compare` |
+| 编辑回放 | `shader-build`、`shader-replace`、`shader-restore` |
+| 自动检查 | `validate`、`assert-pixel`、`assert-clean`、`assert-count`、`assert-state` |
+| 一次性原型 | `script`：在 daemon 内 exec Python，直接使用 controller/rd/state |
 
-**三种运行模式**：
+`debug compare EID_A EID_B X Y` 分别跑两个 draw 的 DebugPixel，对比输出与变量值。编译器分配的寄存器可能不同，因此同名变量比较和跨寄存器同值匹配都只是诊断线索，要结合指令和 shader 变体解释。
 
-- `texture` — 默认，输出 PNG 留痕（PNG 大小差本身也是诊断信号，>10KB = 语义错误）
-- `pixel` — PickPixel API 快验，~6 倍速、无磁盘 I/O，迭代算法时用
-- `debug` — 全部 pass 逐跑，~80s 出 per-pass 差异表格，定位是哪个 pass 引入的
+`validate` 是 event、pixel、resource、vertex-output、cbuffer、capture 等完整性检查，其中部分使用独立 API 路径比对。它不等同于 ShaderVarify 的化简正确性检查，也不等同于 ShaderRE 的产物注入验证。
 
-**Tolerance = 4**：atan2 多项式 vs GPU 内置函数、normalize 的 1-ULP 精度差异是已知噪声源。单个 pass 单独产生 >4 的偏差说明它语义有 bug，不是精度问题。
+### 从旧 MCP 迁来的核心能力
 
-**附带工具**：`pixel_debug`（渲染不一致的逐像素 trace 对比 + DebugPixel 历史）、`verify_bindings`（GLSL 绑定 vs HLSL register 映射诊断）、`dx_input_layout` / `dx_for_increment` / `dx_buffer_layout` / `dx_loop_idiom`（四个 Native-DX 反编译修复——dx_for_increment 出自踩坑 #25、dx_buffer_layout + dx_loop_idiom 出自踩坑 #26、dx_input_layout 出自独立的 DX 寄存器布局调查）。
+`decompile-shader` 支持 SPIR-V / DXBC / DXIL。SPIR-V 路径可选 HLSL/GLSL，DX 路径只支持 HLSL；当前化简默认开启，失败会显式报错。stage 参数使用 `pixel` 等长名：
 
-**无 GPU 回归体系**（改 pass 后不依赖截帧的轻量闸门）：
-
-- golden 回归 — `tests/test_golden.py` 11/11（5 pipeline output + 5 idempotent + 1 files exist），改 pass 后必跑，逐字节断言化简输出
-- `quick_verify` — 编译快检（不渲染）
-- `bench_simplify` — 独立 simplify 计时（不需要 RenderDoc）
-- `profile_timing` — parse 调用计数 + 遍历耗时分析
-- 踩坑记录 27 条（`ShaderVarify/_doc/踩坑记录.md`）沉淀了 Native-DX 调查等全部调试经验
-
-GPU 像素验证（重闸门）与无 GPU 回归（轻闸门）互补：日常迭代跑轻闸门，提交前过重闸门。
-
-### ShaderRE — 逆向产出 + Unity 移植
-
-**用途**：从 RenderDoc capture 出发，最终产出一份**可进 RenderDoc 的反射级重命名 HLSL**，再进一步移植成 Unity shader。这是"分析完以后"的终点管线。
-
-```text
-ShaderToolchain/shader_rename.py     ← SPIR-V 反射 → 反射级重命名（2026-08 归一，原在 ToRDC/）
-_src/ToUnity/AssembleShader.py ← 按 $FRAG_FUNC_START 等标记组装进 Unity 模板
-_src/ToUnity/URP/              ← URP 移植工具链
-proj/                           ← 项目产出（每游戏一目录）
+```powershell
+uv run rdc --session article decompile-shader --stage pixel --event 123 --target hlsl --simplify -o .\pixel.hlsl
+uv run rdc --session article manifest-export (Resolve-Path .\manifest.json).Path
+uv run rdc --session article debug pixel 123 640 360 --trace
+uv run rdc --session article debug compare 123 456 640 360
+uv run rdc --session article validate event --event 123
 ```
 
-> 反射级重命名（shader_rename.py，基于 RenderDoc reflection 变量名）与语义级重命名（`proj/*/_src/rename_semantic.py`，基于 cbuffer 运行时值）是两层互补能力。语义级脚本每游戏一份，随 `proj/` 本地工程走（不入版本库），新项目由 `ShaderRE/_src/new_proj.py` 模板生成。
+`manifest-export` 要求绝对 manifest 路径，示例用 Resolve-Path 从本地相对路径解析；manifest 及其中的输出目录必须能在 daemon 所在机器访问，远程模式需按服务端路径准备。
 
-**ToUnity / URP 工具链**（2026 年中逐步沉淀）：
+`assemble-shader` 从指定 draw 的 VS/PS 出发，当前 handler 只处理 SPIR-V 字节路径，借 ShaderSimplify 与 ShaderRE 模板组装 Unity shader。它不是任意 DX shader 到 Unity 的通用转换器。
 
-- `export_textures.py` — 截帧数据驱动导出贴图
-- `fix_texture_meta.py` — 直改 .meta 精确设纹理格式（BC7 / BC6H）
-- `gen_unity_shader.py` — 生成 Unity shader
-- `urp_verify_fxc.py`（fxc 编译验证 D3D11 SM5.0）/ `urp_verify_dxc.py`（dxc 预检，SM6.0 出 DXIL）
-- Unity 侧 ShaderRT 面板 — Odin 弹窗，`TA/ShaderRE/ShaderRT` 统一入口，自动创建材质 + 按截帧清单自动赋值贴图
+完整命令面查 `uv run rdc --help` 和各子命令 `--help`，本地生成参考位于 `src/rdc/_skills/references/commands-quick-ref.md`。上述示例核对的是当前 Click 参数，本文更新没有重新跑 capture/GPU。
 
-**项目产出**：各游戏逆向工程以 `proj/` 下本地工程承载（每游戏一目录，不入版本库），细节以本地 capture 与 proj/ 工程为准。
+源码依据：`rdc-cli/src/rdc/cli.py`、`commands/mrop/`、`handlers/mrop/`、`handlers/debug.py` 与 `services/session_service.py`。
 
-### NSightCaptureRDC — 抓帧中转站
+## qrenderdoc 扩展与已归档 MCP
 
-**用途**：有些游戏只能用 Nsight Graphics 捕获，但 Nsight 的分析能力不如 RenderDoc。通过 Nsight C++ Capture 中转让，生成 RenderDoc 可分析的 .rdc 文件。
+### GUI 侧仍有用途
 
-**要点**：
+当前本机 extensions 目录可见 ExportConstantsBuffer、BindlessUsage、PixelDebugPrompt、DrawcallTimer、FrameAnalyzer、NvPerfAnalyzer、RDCUtils 与 renderdoc_mcp_bridge 等目录。**目录存在不代表已启用或与当前 SDK 全部兼容**。
 
-- Vulkan 项目需在编译前修改 `VulkanReplay.cpp`（VMA 条件判断），D3D12 不需要
-- Generate C++ Capture 必须用与 capture 相同版本的 Nsight，否则回放失败
-- Nsight 2026.1.0 已废弃 D3D12 C++ Capture 导出，D3D12 需用 2025.5.0
+ExportConstantsBuffer 的 ImageExport / ShaderExport 提供贴图、buffer、输出与 shader 导出相关操作；ShaderExport 的 GenerateUtils 委托 ShaderToolchain，并通过独立解释器做化简。插件适合交互选中、导出和查看；CLI 适合留命令记录和批处理。
 
-### RenderdocPatcher — 改名编译版 RenderDoc
+不能仅凭功能相似就断言所有能力都经历了“插件 → MCP → CLI”的统一迁移。当前能确认的是，CLI 的部分 MROP handler 来自历史 MCP，插件和 CLI 各自仍有对应实现。
 
-**用途**：部分游戏的反作弊会拦截 RenderDoc 附加。把 RenderDoc 源码整体改名编译（`renderdoc` → `rendertest`），用于分析这类场景的渲染。这是渲染技术分析的常规做法——**仅用于研究学习，切勿用于破坏公平竞技的游戏**。
+### RenderdocMCP 的位置
 
-**技术要点**：
+旧服务在 `_retired/RenderdocMCP_20260929/`。它是历史实现与能力来源，当前依赖扫描和运行时不加载它。源码里保留的迁移注释、旧 README 或 `renderdoc_mcp_bridge` 目录，都不能作为旧服务仍在运行的证据。
 
-- 170 条字符串规则 + 4 条块替换规则（`--no-inject-hack` 时 2 条），把源码中所有 "renderdoc" 特征改掉（规则数按 `len(RULES)` / `len(BLOCK_RULES)` 实测）
-- 注入机制：InjectDLL Loader DLL 优先注入（进程内加载），`--apply` 自动创建并编译 Loader DLL
-- `--patch-binary` 后处理编译产物里 `__FILE__` 宏残留的字符串（等长替换，不破坏 PE）
-- 全流程 bat 化：`0_build-*.bat`（编译）→ `4_patch-binary.bat`（二进制后处理）→ `5_check.bat`（残留检查）→ `1_revert.bat`（还原源码）
+旧版文章的 MCP 工具数量、工具分组与独立服务层已移除。当前分析入口查 rdc-cli，当前验证入口查 ShaderVarify。
 
-## 根目录的胶水
+## ShaderVarify：化简正确性检查
 
-- `_src/gen_dep_matrix.py` — 从代码 import 自动扫描生成依赖矩阵，pre-commit hook 校验，防依赖漂移
-- `_src/bootstrap.py` — 仓库根的 sys.path 锚点
-- `_doc/dependency-chain.md` — 依赖链文档（校验真理源，Mermaid 图仅供阅读）
+ShaderVarify 直接加载 RenderDoc SDK，并调用 ShaderSimplify 与 ShaderToolchain。它把“capture 本身的回放变化”“反编译/重编译变化”“化简引入的变化”分开观察。
 
-## 典型工作流
+### texture、pixel、debug 证明的事情不同
 
-### 工作流 A：验证化简正确性（日常迭代）
+| 模式 | 检查方式 | 主要边界 |
+|---|---|---|
+| `texture` | 保存回放、重注入、builtin、simplified 输出；按网格分块逐像素比较 | 网格用于分块，不能把网格数量当成采样点数；覆盖范围依实际输出与网格尺寸 |
+| `pixel` | PickPixel 采样原始、builtin、simplified | 快验；不执行 texture 模式完整的原始字节码重注入自检 |
+| `debug` | 按 only / disable 等模式分析 pass 影响 | 用于缩小问题范围，结论仍依赖所用比较路径 |
+
+texture 模式先检查两次未注入重放，再检查原始字节码重注入，随后比较 builtin 与 simplified。量化图像的网格按输出尺寸连续划分，块内遍历全部像素；pixel 模式才是坐标采样，默认使用网格中心点，给 seed 后使用随机采样。输出、坐标与覆盖范围会影响结论。
 
 ```text
-抓帧 → decompile（spirv-cross）→ simplify（全部 pass）
-     → compile（glslang/dxc）→ 注入 → 渲染
-     → pixel 快验 → texture 出 PNG → debug 定位哪个 pass 引入差异
+texture 路径
+原始回放 ↔ 再次回放              → 重放稳定性
+原始回放 ↔ 原始字节码重注入      → 注入保真度
+原始回放 ↔ builtin              → 反编译/回编译变化
+builtin ↔ simplified           → 化简变化
 ```
 
-### 工作流 B：完整逆向 + Unity 移植
+### verdict 与容差
 
-```text
-抓帧（RenderDoc / Nsight 中转 / 改名版）
-  → RenderdocMCP / rdc-cli 分析（管线总览 → 特性深挖 → 性能）
-  → decompile-shader --simplify 拿可读源码（SPIR-V + DXBC/DXIL）
-  → shader_rename 反射级重命名
-  → AssembleShader 组装进 Unity 模板
-  → export_textures + fix_texture_meta 导入贴图
-  → fxc / dxc 编译验证 → ShaderRT 面板复刻
+| 结果 | 应怎样理解 |
+|---|---|
+| `INJECT_ERROR` / `INJECT_MISMATCH` | 注入失败或原始字节码重注入存在差异 |
+| `INJECT_FIDELITY_LIMITED` | 满足实现中的重放噪声/差异阈值条件，不能当成无条件完全一致 |
+| `DECOMPILE_MISMATCH` | 反编译/重编译链没有达到相应比较标准 |
+| `COMPARE_FAIL` | builtin 与 simplified 比较失败，需要定位变换或编译差异 |
+| `PASS` | 本模式实际执行的检查在当前样本和阈值下通过 |
+
+当前配置有量化比较容差，也有 float RT 的绝对/相对容差、texture 模式的差异占比与视觉尺度判断。旧文“一切统一容差 4”“PNG 大小差超过某值就一定语义错误”“固定几倍速”的说法不再保留。PNG 文件大小不是像素正确性的裁决依据。
+
+### API 与 Compute 支持
+
+SPIR-V 与 Native DX 有不同反编译/回编译链。Native DX 路径包含输入布局、循环递增、buffer layout 和循环 idiom 等修复；Vulkan 的 HLSL 路径还需要处理 IO location 与 descriptor set / space 映射。
+
+Compute 的 texture 模式可检查 UAV：纹理输出走图像比较，buffer 输出保存原始字节并比较。PickPixel 路径仅适用于纹理 UAV，不能用它验证 buffer UAV。
+
+在 RDC 根目录运行，参数中的 capture 和 EID 换成实际输入：
+
+```powershell
+python ShaderVarify/tools/harness.py texture --rdc .\capture.rdc --event 123 --language hlsl --backend treesitter
+python ShaderVarify/tools/harness.py pixel --rdc .\capture.rdc --event 123 --samples 300 --seed 42
+python ShaderVarify/tools/harness.py debug --rdc .\capture.rdc --event 123 --mode disable --pixel --samples 200 --seed 42
 ```
 
-### 工作流 C：shader 逆向 + 语义重命名（shader-reverse-engineering 流程）
+### 无 GPU 检查的边界
 
-从 capture 的一个 EID 到「可编译、可读、像素验证通过」的重命名 HLSL。两个 GPU 闸门（① 基线与 ⑨ 注入）是 `decompile-shader` 只拿源码替代不了的；各命令的完整参数与坑（stage 两套命名、EID 双空间、`--eid` 必传、`--compare` 对照物等）见 `ShaderRE/.claude/skills/shader-reverse-engineering/SKILL.md`：
+golden 测试比较化简源码和预期文本，不需要 GPU 或 RenderDoc；它能发现 pipeline 输出漂移，不能证明回放像素一致。`bench_simplify.py` 做独立计时，但需要源码输入。
+
+`quick_verify.py` 仍需 capture/RenderDoc，只做编译检查；`profile_timing.py` 也需要打开 capture。**“不渲染”不能一概写成“不需要 RenderDoc 或 GPU 环境”。**
+
+源码依据：`ShaderVarify/_src/shader_verify.py`、`rd_capture.py`、`pixel_compare.py`、`renderdoc_runtime.py`、`tools/harness.py` 与 `tests/test_golden.py`。
+
+## ShaderRE：语义、产物身份与验证闭环
+
+ShaderRE 现在覆盖语义重命名、可读版生成、转述辅助、注入验证、资源语义清单和文章装配。Unity 移植工具只是其中一部分。
+
+### 项目脚本只保留配置，机械核心集中维护
+
+`new_proj.py` 生成 `proj/<project>/` 骨架、`project.json` 和项目配置脚本。项目里的 `rename_semantic.py` / `make_readable.py` 是映射与配置入口，机械实现集中在：
+
+- `_src/rename_engine.py`：成员、数组、访问表达式、资源等重命名。
+- `_src/readable_engine.py`：可读版重建。
+- `_src/transcribe.py`：转述分段与装配辅助。
+- `_src/project_context.py` / `project_manifest.py`：项目、baseline 与验证产物身份。
+
+反射重命名尝试利用已有 reflection 名称；**语义重命名**则需要 cbuffer 原始值、绑定、描述符、资源名、shader 运算和贴图/RT 内容互相印证。资源名只是证据之一，不能把“看到名字”写成“已经确认用途”。
+
+当前模板除 MEMBER / ARRAY / ACCESS / RESOURCE / CBUFFER 映射外，还支持 `BUF_NORMALIZE` 和 `LANE_RENAMES` 等配置。映射要对应当前 baseline 的访问形式和编号，不能从另一份重新反编译的源码直接照搬。
+
+### baseline 哈希防止验证错文件
+
+新项目生成后，先将选定的 baseline 保存到项目的 `_generate/`，再登记。以下命令在 RDC 根目录执行，`demo` 和文件路径换成自己的项目；`--file` 相对当前工作目录解析，不会自动相对 `--proj`：
+
+```powershell
+python ShaderRE/_src/new_proj.py demo
+python ShaderRE/_src/project_manifest.py baseline record --proj demo --eid 123 --stage ps --file .\ShaderRE\proj\demo\_generate\baseline.hlsl
+python ShaderRE/_src/project_manifest.py baseline check --proj demo --eid 123 --stage ps --file .\ShaderRE\proj\demo\_generate\baseline.hlsl
+```
+
+记录以 **EID + stage + SHA-256** 关联到 `project.json`，后续检查会拒绝未登记或哈希变化的 baseline。验证记录还保存 report、baseline、target 和可选 source 的路径/哈希；开始验证时先记录 BLOCKED，再按实际结果更新。
+
+这解决“拿另一份 simplified.hlsl 做对照”“源码变了但还引用旧报告”等问题。哈希闭合证明文件身份一致，GPU 是否正确仍由对应验证执行证明。
+
+### 注入必须先证明真的生效
+
+当前 `verify_inject.py` 不再把“采样零差异”直接当成成功。它会使用 canary 正对照扰动输出，确认替换能产生可观测变化，再比较**注入后的 baseline 与目标**；还读取回放日志中的 PSO 重建失败信息。
+
+没有替换生效证据时，零差异可能只是 shader 没有真正被替换，结果会是 BLOCKED。输入 DXBC 二进制时，需要对应的 `--canary-source` 才能构造正对照。运行参数包括必填 `--proj`、`--eid`、`--compare`；采样宽高、编译 profile 和容差也要按目标设置，不沿用旧图的固定屏幕/采样点假设。
+
+| 目标路径 | 对应工具与约束 |
+|---|---|
+| D3D11 / DXBC | `build_dxbc.py`、`verify_inject.py --dxbc`；二进制与源码来源要可追溯 |
+| D3D12 Pixel / DXIL | `verify_inject.py --dxil`；profile 必须匹配所需特性 |
+| D3D12 Compute / 纹理 UAV | `verify_inject_compute.py` 检查注入输出；`gate_dxil.py` 辅助比较归一化编译反汇编 |
+| Vulkan / SPIR-V | ShaderVarify 的 SPIR-V 编译/注入路径 |
+
+`bindless_heap.py` 可辅助把反编译的声明式无界数组恢复为 SM6.6 `ResourceDescriptorHeap` / `SamplerDescriptorHeap` 访问。**无界描述符表与直接 heap 索引不同**，要结合原 DXIL 特征判断，不能看到“bindless”就自动转换。
+
+下面的图只表达通用闭环；每个 API 的完整命令查当前脚本 `--help` 和 ShaderRE 的 `shader-reverse-engineering` 技能。
 
 {{< mermaid-src "flow-reverse-engineering.mmd" >}}
 
-> 图例：粉 = GPU 像素闸门；绿 = 语义分析 / 修复动作；蓝 = rdc-cli 命令；紫 = 产出；虚线 = 跨步数据依赖（① 保真链产物是 ⑤ 改名链的唯一输入）。
+### 从素材证据到文章
 
-> 反编译双目标：保真链（harness，shader_model=50，供 ①/⑨ 逐像素对比）与可读链（CLI，shader_model=60，供 ⑤ 人读 / AI 分析）参数不同，互不替代。
+`init_article_semantics.py` 根据选定 EID 的描述符与 RT 素材生成 `article_semantics.json` 骨架：RT 和纹理有不同默认选取策略，名称与内容不会自动推断。缺失的语义要由分析补齐。
 
-## 小结
+`gen_article_bundle.py` 根据项目、EID、语义清单和素材装配文章包；`--check` 检查 DDS、sidecar、导出清单、正文引用，以及验证产物的哈希/来源是否闭合。
 
-这套工具链的划分逻辑：**引擎（ShaderSimplify）与调度（ShaderToolchain）分离 → 服务（MCP）与 CLI 并行 → 验证（ShaderVarify）兜底 → 产出（ShaderRE）收口**。每层优先依赖下面一层（有意的向上依赖：MCP → ShaderRE 的 assemble 能力；rdc-cli → ShaderRE/ShaderSimplify 的 try/except 导入——失败时直接报错，并非可替代实现）。模块边界清晰是设计目标，2026-08-12 审计发现的漂移点收敛了一个：simplify subprocess 协议原 3 处手写，当日统一到 `ShaderToolchain/simplify_subprocess.simplify_source` 单一通道（rdc-cli 删内联复制、插件委托 subprocess 通道），失败语义从静默降级改为显式报错（带 stderr 原因）。仍在漂移：decompile→rename→simplify 流水线 3.5 份实现、引擎进程内入口 4 处并存。
+装配检查**不会重跑 GPU，也不普遍要求所有记录状态都是 PASS**。它验证的是证据链完整性；报告中的 FAIL、BLOCKED 或受限结果仍应在文章中如实说明。
 
-> **📋 事实核查**：本文于 2026-08-13 经 fact-check-report 核查（以代码为真理源），共 73 条陈述（✅ 71 正确 / ❌ 2 有误），已修正 2 处 + mermaid 图 1 处。
+`proj/` 中素材、shader、报告和项目文章留在本地工作树，不加入 RDC 的 Git。通用脚本和技能才属于工具仓库的维护范围。
+
+源码依据：`ShaderRE/_src/new_proj.py`、`rename_engine.py`、`readable_engine.py`、`project_context.py`、`verify_inject.py`、`verify_inject_compute.py`、`gen_article_bundle.py`。
+
+## Unity / URP：模板能省搬运，算法适配仍需人完成
+
+`ToUnity/AssembleShader.py` 解析 HLSL 结构和标记，把片段填进指定 Unity 模板。它能减少重复装配，不能自动恢复原引擎的数据来源、光照环境、材质关键字、坐标空间和渲染状态。
+
+| 工具或模板 | 当前实际输出 |
+|---|---|
+| `URP/export_textures.py` | 导出指定 draw 的 PS 绑定贴图；非 float / float 分别走 TGA / EXR，并写 `texture_info.json` |
+| `URP/fix_texture_meta.py` | 按贴图清单设置 mip、sRGB、尺寸和平台格式；不限于 BC7/BC6H |
+| `URP/gen_unity_shader.py` | 生成 Properties 与 CBUFFER 文本，供粘贴/装配到 shader |
+| `URP/urp_verify_fxc.py` | 使用 URP/Core include 环境做 fxc 编译检查 |
+| `URP/urp_verify_dxc.py` | 使用对应 include 环境做 dxc 预检 |
+| `URP/Template/*.cs` | ShaderRT 编辑器窗口、材质赋值与贴图导入设置模板，部分依赖 Odin |
+
+这些是可移植的脚本与模板，不是已经在所有 Unity 项目安装的统一应用。编译通过只是第一道检查；还要在 Unity 中核对实际材质、变体、绑定、空间约定与最终画面。
+
+源码依据：`ShaderRE/_src/ToUnity/AssembleShader.py`、`ToUnity/URP/` 与 `PORT_TO_UNITY.md`。
+
+## 抓帧中转与独立 Patcher
+
+### NSightCaptureRDC
+
+工具读取 Nsight capture metadata，寻找匹配的 Nsight 版本，Generate C++ Capture，再编译生成的工程，通过 RenderDoc 捕获回放。它不是直接把任意 Nsight 文件转码为 RDC，也不意味着 Nsight 支持而 RenderDoc 不支持的 API 特性会自动变得可回放。
+
+本地流程要求匹配 capture 的 Nsight 版本。Vulkan 工程在编译前修复 `VulkanReplay.cpp` 中 VMA buffer device address allocator flag 的条件判断；D3D12 不做这项修复。回放工作目录要包含工程的数据文件，捕获入口使用 `renderdoccmd capture`。
+
+版本说明需要区分官方与本地经验：本地文档对 D3D12 中转采用 2025.5 的保守流程；[NVIDIA 2026.1 官方 Release Notes](https://archive.docs.nvidia.com/nsight-graphics/2026.1/ReleaseNotes/index.html) 将 D3D12 / Vulkan C++ Capture 列为 deprecated，说明将来移除，不能据此说该版本已经统一移除。后续[官方 Release Notes](https://docs.nvidia.com/nsight-graphics/ReleaseNotes/index.html) 也有 Vulkan C++ Capture 的弃用提示。具体 capture 是否还能导出，仍要核对对应版本和实际输出。
+
+源码依据：`NSightCaptureRDC/_src/nsight_to_cpp.py` 与该项目的 `nsight-to-rdc` 技能。
+
+### RenderdocPatcher
+
+Patcher 是位于 RDC 外的独立 Git 仓库，本机源码位置记录在 `context.json`。它对特定上游源码版本执行字符串、代码块和注入相关的定向修改，并对编译二进制中的残留特征做后处理。
+
+不能把它描述为“清除所有 RenderDoc 特征”或通用反作弊绕过方案。规则依赖上游源码文本，换 tag 后要重新核验；版本跟随的维护约定也不代表当前本地每个新版本都已验证兼容。
+
+规则与操作入口以独立仓库的 `_src/renderdoc_patcher.py`、`_bat/` 和 `--help` 为准。原文固定规则数、旧 bat 编号和旧 RDC 内路径不再作为当前操作指南。
+
+## SDK 环境、构建工具与根目录胶水
+
+### SDK ABI 与发现路径
+
+当前本机 rdc-cli 的 `.python-version` 钉在 **3.12**，生效 RenderDoc SDK 位于 `C:/Program Files/RenderDoc/`，本机 `renderdoc.pyd` 按 Python 3.12 ABI 构建。这是本机约束，不能推成 rdc-cli 的通用最低版本。
+
+`discover.find_renderdoc()` 先尝试 bare import，再检查候选目录并做子进程探测；候选包括环境变量、系统安装目录和 `renderdoccmd` 同目录。本机不用设置 `RENDERDOC_PYTHON_PATH`。GUI 内嵌 Python 和 CLI SDK 环境要分别处理，避免 GUI 的扩展模块抢占 CLI 标准库。
+
+ShaderVarify 的路径解析与 runtime 加载是另一条实现，可通过 `RENDERDOC_MODULE_PATH` 指定 SDK 目录。不能把不同消费者的环境变量混写成统一安装步骤。
+
+### BuildWHL 与 BuildPyi
+
+这是旧文章遗漏的当前支撑工具：
+
+- **BuildWHL**：从 RenderDoc 源码构建 Python 模块与 DLL，验证导入，再组装 wheel；源码、缓存、目标 Python 和 stubs 可通过参数选择。
+- **BuildPyi**：通过匹配版本的 RenderDoc `docs/stubgen.py` 生成类型存根；qrenderdoc 存根从同版本 GUI 的 pystubs 导入。
+
+源码在 `Build/BuildWHL/_src/build_rdoc.py` 与 `Build/BuildPyi/_src/generate_stubs.py`。默认路径和本地源码缓存可能滞后，开始构建前查脚本参数与目标版本，不能把默认值当成本机最新环境。wheel 构建/安装也不意味着所有 daemon 已切换到新 SDK。
+
+### 仓库胶水与查证入口
+
+| 文件 | 职责 |
+|---|---|
+| `_src/bootstrap.py` | RDC 根定位、路径注入与 SDK 路径解析辅助 |
+| `_src/gen_dep_matrix.py` | 扫描 import，生成/校验依赖矩阵 auto 区 |
+| `_doc/dependency-chain.md` | 依赖矩阵与组织说明 |
+| `ShaderRE/_src/shader_re_doctor.py` | 按分析/重命名/文章任务检查所需环境与入口 |
+
+读源码时也要区分“注册了某工具”“某路径有 fallback”“运行中成功加载”这几个层次。矩阵捕捉 import 关系，不能替代 GPU、外部工具或独立仓库的实际验证。
+
+## 怎样选择工作流
+
+| 当前目标 | 建议入口与终点 |
+|---|---|
+| 只想看某 draw 的资源和参数 | rdc-cli / qrenderdoc 查询、导出 |
+| 只想拿到可读源码 | decompile-shader；输出可阅读不等于可注入 |
+| 修改化简 pass | golden 文本回归 → ShaderVarify 对指定 capture 的比较 |
+| 做语义重命名/转述 | ShaderRE 登记 baseline → 改写 → 按 API 编译和注入验证 |
+| 写分析文章 | 补语义与证据 → gen_article_bundle 装配/检查 → 说明报告适用范围 |
+| 移植 Unity | 前述证据和 shader → ToUnity/URP 模板工具 → Unity 内画面核对 |
+| capture 只能经 Nsight 获得 | 先确认版本与 C++ Capture 能力，再用 NSightCaptureRDC 中转 |
+
+这套工具的边界已经从“GUI / MCP / CLI 三种入口并行”收敛为：**rdc-cli 负责读帧与自动化，ShaderToolchain 负责外部工具与共享变换，ShaderSimplify 负责源码化简，ShaderVarify 与 ShaderRE 分别检查化简链和产物链**。生成文件、编译通过、采样通过和最终画面复现，是不同阶段的结果，应分别保留证据。
+
+> **📋 事实核查**：本文于 2026-10-13 按 fact-check-report 对照当前本地源码更新，同步修订依赖图、流程图与 context.json。命令示例经参数定义核对；本次未重跑 capture/GPU，不能把历史实测或本文更新当成当前帧的验证报告。
