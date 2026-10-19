@@ -27,11 +27,11 @@
     },
     {
       "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_QC/README.md",
-      "note": "sdpcli 2026.6 Vulkan trace 层崩溃调查总索引（双轨触发模型）"
+      "note": "官方 sdpcli 2026.6 / 2026.8 调查索引；版本、实验候选和可信度边界"
     },
     {
       "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_QC/_doc/crash-analysis.md",
-      "note": "行级反汇编定位（CollectOneCmdMonitor → 驱动 memmove UAF）"
+      "note": "历史反汇编定位；UAF 定论已撤回，以 2026-10-19 动态报告为准"
     },
     {
       "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_QC/_doc/device-notes.md",
@@ -39,12 +39,56 @@
     },
     {
       "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_QC/_doc/qdn-post-final.md",
-      "note": "QDN 论坛发布件（2026-09-02 已投递，权威版）"
+      "note": "历史 QDN 发布稿，顶部有后续更正；不得将历史根因假说视为当前定论"
     },
     {
       "path": "D:/ClaudeProjects/ToolsPlay/SdpCliExplorer/",
       "note": "官方 sdpcli 封装 GUI 探索器（指标采样/trace 双模式）"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/README.md",
+      "note": "当前入口、部署和目录归属"
+    },
+    {
+      "path": "D:/ClaudeProjects/ToolsPlay/SdpWorkbench/_src/sdp_workbench.py",
+      "note": "桌面工作台入口与默认后端路径；新版端到端验收仍待完成"
+    },
+    {
+      "path": "D:/ClaudeProjects/ToolsPlay/SdpWorkbench/README.md",
+      "note": "已有桌面能力和当前验收边界"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_QC/_doc/sdpcli-alu-analysis-20261019.md",
+      "note": "按时间记录；最终17:33同捕获42 Draw ×3指标通过四位小数比较；多轮≤10%未完成"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_QC/_doc/rea-crash-investigation-20261019.md",
+      "note": "当前崩溃证据与实验限制；错误长度已证实，UAF/竞态未证实"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_QC/_doc/sdpcli-2026.8-investigation-20261019.md",
+      "note": "当前崩溃证据与实验限制；错误长度已证实，UAF/竞态未证实"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_PY/SDPCLI/_generate/README.md",
+      "note": "经典实验迁移清单；仍有被占用的旧副本"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_PY/SDPCLI/_generate/mapped-gui-comparison-2026-10-19T17-27-58.csv",
+      "note": "同捕获126项指标对照结果"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_PY/SDPCLI/_generate/compare_mapped_gui.py",
+      "note": "同捕获匹配验证脚本；非任意跨帧配对"
+    },
+    {
+      "path": "D:/ClaudeProjects/AndroidProfile/SDPCLI_PY/SDPCLI/_generate/sdp/2026-10-19T17-27-58.sdp",
+      "note": "同捕获原始归档，SHA256 6464df0f410792704ef1d0863c7d0d2a9a67eb97b1b356c4028964045c5d3d0a"
+    },
+    {
+      "path": "C:/Users/luobowen01/Desktop/Export_2026-10-19_17-33-43.csv",
+      "note": "用户由同捕获导出的官方GUI基准；不是14:10独立帧CSV"
     }
   ],
-  "notes": "调研源头 = 官方 Snapdragon Profiler(SDP) 体验差：主要痛点是流程迭代慢（连设备→启动→截帧→导出→人工分析，往返周期长）与截帧经常崩溃/录空。最终定案（2026-09-03 简述 md：D:/ClaudeProjects/AndroidProfile/简述_GPU分析工具调研_优劣与方向.md）：主线 A 线 = 官方 DLL（从官方安装目录 C:/Program Files/Qualcomm/Snapdragon Profiler 解析 SDPClientFramework/SDPCoreWrapper/SDPCore.dll）+ 自编壳 + 自建前端（未来），手机侧全官方零改动；经典 PROFILER_Trace 层链路 trace 稳定。qprof（Qualcomm Profiler）消费机激活跑通但 GPU 指标受限→弃（记录激活路径）。B 线官方设备侧 sdpcli：r l/r c realtime 保留（127 项指标）；Vulkan trace 2026.6 注入层 22 次同栈崩溃（UAF，双轨触发模型）→弃，已投 QDN。pysdp 是 A 线调研期实验平台：LLM 分析非需求、WebUI 形态未沿用，DuckDB 数据层思路可吸收。自编壳当前 = 修复版 v0.1.4（可行性已验证），编排改造是未来工作。正文按公开级对内部应用包名做了脱敏，一律以'Unity 内部测试工程'代替。"
+  "notes": "更新于2026-10-19。主入口为ToolsPlay/SdpWorkbench桌面工具，自编SDPCLI后端已部署Release/runtime；pysdp WebUI不作为本轮入口。单捕获42 Draw×3指标共126项按四位小数与官方GUI一致，只证明该捕获导出一致性；多轮≤10%和最新桌面端到端验收未完成。官方sdpcli 2026.8正常启动仍崩；第二路异常计数导致超长拷贝已观测，UAF/竞态根因未证实。暂停启动与reset初始化仅有限候选，指标正确性未证实，不默认启用。经典证据已迁SDPCLI/_generate，官方CLI证据留Explorer/_generate，少量被占用副本待清理。qprof为特定设备历史激活研究，当前不投入，不宣称永久不可用。公开正文不得出现内部项目代号和应用包名；统一泛称Unity测试应用。历史报告有时间递进，必须读取末尾结论，不以早期状态覆盖最终结果。文章已本地修订，未发布；构建验证与手机性能验收区分。"
 }

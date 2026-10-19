@@ -1,259 +1,237 @@
 +++
 date = '2026-09-03T17:00:00+08:00'
+lastmod = '2026-10-19'
 draft = false
 title = 'Snapdragon Profiler 太难用？高通 Adreno GPU 分析工具链调研与替代之路'
 tags = ['Android', 'GPU', '性能', 'CLI', 'Adreno', 'Qualcomm', 'SnapdragonProfiler', '逆向']
 categories = ['图形渲染']
 +++
 
-## 1 缘起：为什么 Snapdragon Profiler 不够用
+## 当前进度：后端数据已对齐，桌面工具仍待完整验收
 
-调研的源头是**官方 Snapdragon Profiler（桌面 GUI）的体验太差**。它本身是高通官方针对 Adreno GPU 的图形分析工具，能逐帧截取 Draw Call 参数、GPU 硬件计数器、Shader、纹理与 Mesh，[官方产品页](https://www.qualcomm.com/developer/software/snapdragon-profiler) 描述的能力很强，但实际用起来主要卡在两个点上：
+更新日期：2026-10-19。本文保留调研经过，并以本节和最后的待办作为当前状态。实验结论限于本机设备、应用和记录的版本组合。
 
-| 痛点 | 具体表现 |
-|---|---|
-| **流程迭代慢** | 一次"连设备 → 启动应用 → 截帧 → 等导出 → 人工看结果"全靠 GUI 点按，每轮优化的往返周期太长；想换一组指标或换一帧又得从头来 |
-| **截帧经常崩溃** | 截帧/trace 过程不稳定，经常采着采着就崩或录空，白跑一趟、返工率高，久而久之不敢拿它做日常 |
+**目前最实质的成果：经典截帧后端取得了一份完整捕获，42 个 Draw 的三项主要 GPU 指标，与官方 SDP GUI 对同一捕获的导出结果按四位小数完全一致。** 修复后的后端已部署；但桌面工作台对新版产物的完整操作流程、多轮误差验收仍未完成。
 
-次要问题同样真实存在：
+| 工作项 | 当前状态 | 能说明什么 |
+|---|---|---|
+| 经典 Snapshot 采集、解析与归档 | 已取得有效捕获，修复版已部署 | 已有可供 GUI 接入的数据后端 |
+| API 与 Draw 指标归属 | 已修复本次验证路径 | 避免句柄精度损失、错配与跨 Draw 求和 |
+| 同捕获 CLI / GUI 三项指标对齐 | 42 Draw × 3 指标，共 126 项通过四位小数比较 | 该捕获的导出值一致 |
+| 同场景多轮、主要指标误差 ≤10% | **未完成** | 不能宣布性能测量稳定性已达标 |
+| ToolsPlay 桌面工作台 | 已有采集、历史、逐 Draw 和 API 时间线界面 | 新后端与整套界面的完整验收仍待进行 |
+| 官方设备侧 sdpcli 2026.8 原生崩溃 | 正常启动仍复现；有实验绕过候选 | **不能宣布根治，也不能把止崩当作指标正确** |
+| 文件和入口整理 | 已明确归属并迁移主要实验文件 | 少量占用中的旧副本仍待清理 |
 
-| 痛点 | 表现 |
-|---|---|
-| 只能"查看"，不能"分析" | 工具把原始数据摆出来，但不告诉你瓶颈在哪、哪些 DC 有问题 |
-| 手工逐 DC 分析不现实 | 一帧几百上千个 Draw Call，靠人肉逐个查不现实 |
-| GPU 架构知识门槛高 | Adreno 的 metrics 含义需要专业背景才读得懂 |
-| GUI 流程重、难自动化 | 导出、整理、批量跑都难脚本化，和 CI 无缘 |
+证据来源：本地《GPU 指标对齐调查》的“17:33 同一捕获 GUI 对照通过”记录、配对 CSV、后端部署记录及工具源码。文章末尾列出对应文件，机器路径由本篇 `context.json` 保存。
 
-于是调研方向很自然地收敛成一个问题：**在 Adreno 上做 GPU 分析，有没有比官方 GUI 更快、更稳、还能自动化的替代？** 更理想的是：截帧数据能拿到手、提取自动化、流程能按自己的习惯编排。调研初期的设想里曾包含"分析用规则和 AI 自动完成"，后来被修正（详见 4.4）——最终主线是数据接入与控制权，而不是 AI 分析。本文按"调研全过程"还原：动机、路径、关键结论与踩坑。
+## 1 为什么要做替代工具
 
-![Snapdragon Profiler 官方桌面 GUI（截图内容待复核）](sdp.webp)
+最初的痛点是操作往返太多：连接设备、启动应用、截帧、等待导出、整理文件，再逐 Draw 检查。部分测试组合还出现采集失败、空归档或进程退出，重复劳动多。
 
-## 2 调研全景与结论速览
+目标逐渐明确为：**把采集和提取做成可编排的后端，再用顺手的桌面界面查看可信数据。** 自动生成 AI 诊断报告不是这轮的核心需求。
 
-替代方向并非单一工具，而是**A 线（mysheng8 SDPCLI → 官方 DLL 直连）+ qprof 尝试 + B 线（官方 sdpcli）**三条线并行（pysdp 是 A 线调研期的实验平台，非最终形态）：
+官方 GUI 仍有价值：它是当前数据对照的重要工具。早期文章将它概括为“不要走的路”过于绝对；自建工具也复用官方组件，换一层界面不会自动消除底层故障。
 
-```mermaid
-flowchart TD
-    classDef origin fill:#fff9c4,color:#000
-    classDef route fill:#e1f5fe,color:#000
-    classDef good fill:#e8f5e9,color:#000
-    classDef bad fill:#ffebee,color:#000
-    classDef final fill:#f3e5f5,color:#000
+![调研期 Snapdragon Profiler 桌面界面](sdp.webp)
 
-    A["官方 Snapdragon Profiler GUI<br/>（流程迭代慢、截帧常崩）"] --> B{"替代路线"}
-    B --> C["A 线：逆向 mysheng8 SDPCLI<br/>官方 DLL 直连（主线）"]
-    B --> D["qprof server 激活<br/>（Qualcomm Profiler）"]
-    B --> E["B 线：官方设备侧 sdpcli<br/>trace 崩溃调查"]
-    C --> F["自编壳可行性 ✅<br/>自建前端（未来）"]
-    D --> G["消费机跑通 ✅<br/>GPU 指标受限 ❌ 弃"]
-    E --> H["实时采样 ✅ 保留"]
-    E --> J["Vulkan trace ❌ 弃"]
-    F --> I["最终方向"]
-    H --> I
+## 2 几个名字相近的工具，分别负责什么
 
-    class A,B origin
-    class C,D,E route
-    class F,H good
-    class G,J bad
-    class I final
-```
+最容易混淆的是自编 Windows `SDPCLI.exe` 与高通设备侧 `sdpcli`。它们属于不同采集路线，故障和修复结论不能互相套用。
 
-一句话结论：
+| 名称 | 定位 | 本轮如何使用 |
+|---|---|---|
+| 官方 Snapdragon Profiler GUI | 高通桌面分析工具 | 打开同一份捕获，导出指标作基准 |
+| **SdpWorkbench：SDP 截帧工作台** | ToolsPlay 内的自建 PyQt5 桌面前端 | 日常主入口，驱动经典截帧后端 |
+| 自编 `SDPCLI.exe` | 基于第三方壳逆向、修复的 C# 后端，调用官方组件 | 连接、截帧、回放、提取、指标关联与归档 |
+| SdpCliExplorer：SDP CLI 探索器 | 高通设备侧 `sdpcli` 的桌面封装 | 实时采样及官方 Trace 实验 |
+| pysdp | Python 分析平台与 WebUI | 历史调研平台，本轮不采用其网页作为入口 |
+| Qualcomm Profiler / qprof | 另一套官方工具生态 | 保留消费机激活研究，本轮不作为主线 |
 
-- **主线（A 线）**：官方 GUI 只是"官方 .NET 接入层（`SDPClientFramework`/`SDPCoreWrapper` → 原生 `SDPCore.dll`）的一个壳"，mysheng8 SDPCLI 只是"官方 DLL + 自写 CLI 壳"。因此替代方向收敛为：**官方 DLL 直接从安装目录引用 + 自编壳 + 自建前端**——手机侧零改动；经典 `PROFILER_Trace` 层链路截帧可用、稳定不崩；
-- **qprof（Qualcomm Profiler 新生态）**：消费机上激活成本高（root hack 三连），且可用 GPU 指标受限（基础几项），**弃用**，仅记录激活路径供参考；
-- **B 线（官方设备侧 sdpcli 2026.6）**：`r l/r c` 实时采样稳定可用（127 项指标，不经 Vulkan 层）；**Vulkan trace 不可用**——注入层 22 次同栈崩溃（层内数据缓冲生命周期竞态 UAF），已投递 QDN 论坛提问区。
-
-### 2.1 工具全景（含官方下载/来源链接）
-
-| 工具（下载/来源） | 类型 | 优点 | 缺点 | 状态 |
-|---|---|---|---|---|
-| [Snapdragon Profiler GUI](https://softwarecenter.qualcomm.com/catalog/item/Snapdragon_Profiler) | 官方 GUI | 经典层 trace 稳定、能逐 DC/逐帧、带分析与资源导出 | GUI 无敌难用、迭代慢、截帧常崩、无法脚本化 | 长久以来的默认解法 → 调研替代对象 |
-| [Qualcomm Profiler](https://softwarecenter.qualcomm.com/catalog/item/Qualcomm_Profiler) | 官方新一代 GUI 生态 | 官方新一代、有用户指南（80-54323-2） | 消费机需 root hack（shm 垫片 + overlay + FTP）才起 server；GPU 指标极少（基础几项） | 弃（激活跑通，指标受限） |
-| [官方设备侧 sdpcli（B 线 2026.6）](https://softwarecenter.qualcomm.com/catalog/item/SnapdragonProfilerCLIAndroid?type=Tool) | 官方设备侧 CLI | realtime 127 指标、走驱动计数器、不经 Vulkan 层 | Vulkan trace 层 22 次同栈必崩（UAF，已投 QDN） | trace 弃 / realtime 留 |
-| [pysdp](https://github.com/mysheng8/pysdp) + [自编 SDPCLI 壳](https://github.com/mysheng8/sdpcli-releases) | 自研 | 验证了"CLI 截帧 → 数据管线"全流程可行；DuckDB 等组件可复用；把官方 API 变成 CLI / HTTP server；经典层能 trace | WebUI + 数据分析没被有效利用 | 从中学习怎么和 SDP 安卓端交互（壳为未来时） |
-
-## 3 调研时间线（按档案还原）
-
-整个调研从 2026-05 延续到 2026-09，Git 记录与文档档案可以还原出如下主线：
-
-| 时间 | 事件 |
-|---|---|
-| 2026-05 ~ 07 | pysdp 分析平台开发期（路径处理、metrics 展示、AI 提示词定制等节点，见其 docs/context 档案） |
-| 2026-06-26 | 先行的《安卓 Shader 性能测试工具调研》成文（离线编译器/PMU/系统追踪的 CLI 工具盘点） |
-| 2026-07-27 | 上游第三方 CLI `SDPCLI v0.1.4` 发布（mysheng8/sdpcli-releases），成为逆向对象 |
-| 2026-08-27 | 在骁龙 8 Elite 消费机（OPPO Ace 5 Pro）上激活新版 Qualcomm Profiler 的 qprof server（gRPC 62472 监听成功）+ FTP 通道 + GPU 计数器解锁 |
-| 2026-08-27 ~ 28 | SDPCLI 逆向建档：通信架构全图、3 个 bug 定位与修复、自编 exe 构建 |
-| 2026-08-31 | 官方 sdpcli 探索封装（SdpCliExplorer）起步；同日首现 Vulkan trace 带崩应用 |
-| 2026-09-01 | 崩溃调查归档：真机复现 × 反汇编 × 三代层对照 |
-| 2026-09-02 | 触发模型双轨修正（22 次同栈普查）、最小复现、QDN 发布件投递 |
-
-## 4 路线一（主线）：逆向 mysheng8 SDPCLI → 官方 DLL 直连
-
-### 4.1 SDPCLI 是什么、为什么要逆向它
-
-调研中发现的可用替代品之一是 mysheng8 开源的 **Snapdragon Profiler CLI（`SDPCLI.exe`，v0.1.4，非高通官方）**（[发布仓库](https://github.com/mysheng8/sdpcli-releases)）。它把官方 Snapdragon Profiler 的"截帧 + 提取"能力搬到了命令行：连设备、启动应用、截帧、导出 DrawCall/Shader/纹理/Mesh。
-
-但直接用它有 3 个实际问题：帧级分析结果被截断、资源提取并发一高就原生崩溃、发布包缺 DLL 导致 Vulkan 截帧起不来（详见 4.3）。要"改 bug 改成自己的版本"，就必须先完全逆向它的通信机制。目标定为：**可编译的自编工程 + 修复后的行为等价版**。
-
-### 4.2 逆向的最大收获：官方本来就有可编程接入层
-
-用 ilspycmd 反编译托管层（19.4k 行、14 个命名空间、0 混淆），再配合运行期观测（`adb forward/reverse` 列表、设备端 netstat、层内 socket），把"PC CLI ↔ 手机 SDP service"的链路画了出来：
+当前主线是：
 
 ```text
-PC 托管层  SDPCLI.exe（jobs 编排：dumpsys/pm list/pidof/logcat 轻活）
-  └→ SDPCoreWrapper.dll（SWIG 自动生成，CSharp_* P/Invoke）
-       └→ 原生 SDPCore.dll + libDCAP.dll（Qualcomm 官方 SDP Core SDK）
-            ├─ adb reverse tcp:6500   （命令通道）
-            ├─ adb forward tcp:6504-6525（24 条数据通道）
-            └─ 设备侧 sdpservice / SnapshotPlayer(-port 9600)
-                 └─ Vulkan 层 libVkLayer_PROFILER_Snapshot.so → GFXR socket
+ToolsPlay → SDP 截帧工作台（SdpWorkbench）
+                    ↓ HTTP 调用
+             自编 SDPCLI.exe
+                    ↓ 官方组件
+              手机经典 Snapshot 采集
+                    ↓
+           捕获归档、逐 Draw 数据与桌面查看
 ```
 
-**比通信架构更重要的结论**：mysheng8 的壳不是唯一出路——官方安装目录（`C:\Program Files\Qualcomm\Snapdragon Profiler`）本身就带全套接入层：
+工作台已存在，不再是“未来要写一个前端”。但“已有界面”和“最新后端已在界面端到端验收”是两件事，后者尚未完成。
 
-| 官方文件 | 性质（已用程序集元数据验证） |
-|---|---|
-| `SnapdragonProfiler.exe` | .NET 程序（官方 GUI 本身就是壳） |
-| `SDPClientFramework.dll` | .NET 托管客户端框架 |
-| `SDPCoreWrapper.dll` | .NET SWIG 绑定层 |
-| `SDPCore.dll` / `libDCAP.dll` | 原生 C++ 实现 |
+## 3 主线进展：从能导出到能相信指标
 
-也就是说：**官方 GUI 只是"官方托管 API 的一个壳"，mysheng8 只是"官方 DLL + 自写壳"**——两者都直接引用同一套官方组件（同源、版本不同：mysheng8 打包的是旧版，官方目录是最新版）。因此后续方向收敛为：**官方 DLL 直接从安装目录引用 + 自编壳 + 自建前端**，而不是去自己实现协议。手机侧保持全官方组件、零改动。
+### 3.1 从第三方壳获得可编程接入方式
 
-### 4.3 修掉的 3 个 bug（v0.1.4 均存在）
+[mysheng8/sdpcli-releases](https://github.com/mysheng8/sdpcli-releases) 提供第三方 Snapdragon Profiler CLI 的二进制发布。这个发布仓库不能作为“源码已开源”的依据。
 
-| Bug | 症状 | 根因（反编译定位） | 修复 |
-|---|---|---|---|
-| 1 | dc.json 只有 5 个 DC 且全是阴影 pass | `AnalysisCmdBufferIndex=0 (AUTO)` 取"DC 最多的 command buffer"，对 Unity 这种一帧挂上百个 cb 的结构选错 | `AnalysisCmdBufferIndex=-1`（全部 cb） |
-| 2 | 资源提取阶段进程无异常消失，`0xc0000374` 堆损坏 | `TextureExtractionDegree=8` 默认 8 线程并发调原生 Qonvert，作者注释自己都写"Keep at 4 unless you confirm Qonvert is thread-safe" | `TextureExtractionDegree=4`、`MeshExtractionDegree=4` |
-| 3 | 启动即缺 `GLibSharp` 等程序集，Vulkan 截帧 API 数据端起不来 | 发布包漏打包 5 个 GtkSharp DLL | 从 NuGet 补齐并修 config |
+早期通过托管代码反编译和运行观测，确认这条链路复用 `SDPClientFramework`、`SDPCoreWrapper`、`SDPCore.dll` 等官方组件。设备侧由 service、SnapshotPlayer 和经典捕获层协作完成采集，不需要自建整套通信协议。
 
-修复后 `dotnet build` 即出自编 `SDPCLI.exe`（自带全量运行时）——**自编壳的可行性已验证**（当前仍是"修复版 v0.1.4"，编排改造是后续工作）。
+最初修复了 command buffer 选择导致的提取不完整、资源提取并发相关崩溃，以及缺失程序集等问题。它们证明了自编后端的可行性，但并不证明所有 GPU 指标已正确。
 
-### 4.4 中间产物 pysdp（实验平台，形态未沿用）
+目前使用的是**匹配验证过的一组运行库和自编后端**，已部署到项目的 `Release`，配套资产同步到 `runtime`。不能随意混用不同版本 DLL；“直接换上最新版官方 DLL 就能用”不是已验证结论。
 
-调研期在 A 线之上做过一个分析平台 pysdp（[GitHub](https://github.com/mysheng8/pysdp)），把截帧数据接入 DuckDB 并尝试自动化分析：
+依据：本地 `architecture.md`、`bugs.md`，以及 2026-10-19 指标对齐报告。
+
+### 3.2 本轮修复了哪些数据问题
+
+| 问题 | 修复内容 | 意义 |
+|---|---|---|
+| 新旧 API 结构布局不一致 | 适配并验证实际 SDK 的结构布局与字符串表示 | 防止 API 数据被错误解释 |
+| 导入版本不匹配 | 从捕获版本信息读取版本 | 避免用错误版本参数导入 |
+| 64 位无符号句柄精度损失 | Replay / Capture 句柄用十进制文本保存，拒绝不兼容的旧表结构 | SQLite 不能再把大句柄转成有损浮点数；已丢失的精度不能靠转回文本恢复 |
+| Draw 与指标关联不唯一 | 根据 API 录制和提交建立映射，使用完整捕获、回放句柄、提交次数和 Draw 身份关联 | 避免把不同 command buffer 的相同局部序号混在一起 |
+| 重复或冲突数据被错误合并 | 相同身份、相同值去重；冲突或缺失关系明确报错 | 不再用求和或猜测掩盖歧义 |
+| 导出失败仍可能表现为成功 | 传播导入、提取错误，并清理旧指标结果 | 防止失败后展示上一次数据 |
+| SDK 压缩与归档同时操作文件 | 比较复制前后文件集合、长度和修改时间，变化时重试，持续不稳定则失败 | 避免把不完整归档当作成功结果 |
+
+当前映射验证覆盖实际使用的 primary command buffer 单次提交路径；重复提交绘制 command buffer、secondary command buffer、Submit2 等路径尚未验证，当前明确拒绝处理。**不支持时应给出原因，不能生成看似可信的数值。**
+
+归档竞态修复有六项针对性回归；真机也实际遇到源文件在归档期间消失，重试后成功完成归档。集成构建记录为 0 errors、278 warnings，并非“零警告”。
+
+依据：`sdpcli-alu-analysis-20261019.md` 中的 API 布局、句柄存储、映射和归档回归记录。
+
+### 3.3 同一份捕获，与官方 GUI 对齐到了什么程度
+
+基准捕获：`2026-10-19T17-27-58.sdp`。用户在官方 SDP GUI 中打开这一份捕获，导出 `Export_2026-10-19_17-33-43.csv`。
+
+配对使用 command buffer 与局部 Draw 序号，检查一一覆盖、API 名称和标量绘制参数；不是将两个独立帧简单按行号对齐。
+
+| 指标 | 对照数量 | 最大非零基准相对差异 |
+|---|---:|---:|
+| % Shader ALU Capacity Utilized | 42 / 42 | 0.002621677% |
+| % Wave Context Occupancy | 42 / 42 | 0.000777479% |
+| % Time Shading Fragments | 42 / 42 | 0.000053642% |
+
+三项共 **126 个数值**，CLI 结果四舍五入至小数点后四位后，全部与 GUI CSV 相同。最大绝对差约为 **0.000049851632 个百分点**，符合该 CSV 的显示精度；零基准也分别核对为双方为零。
+
+这里的 Fragment 指标是 **着色时间占比**，不是毫秒耗时。也不能把“与官方导出一致”解释为已独立证明硬件计数器本身绝对准确。
+
+捕获 SHA-256：
 
 ```text
-截帧(.sdp) → C# 提取(SDPCLI) → DuckDB 入库 → 分析 → WebUI 可视化
+6464df0f410792704ef1d0863c7d0d2a9a67eb97b1b356c4028964045c5d3d0a
 ```
 
-它的定位后来被修正：**LLM 分析不是需求，WebUI 形态也不符合使用习惯**，所以 pysdp 作为产品形态不保留（DuckDB 数据层等思路可吸收进自建前端）。真正的主线始终是 4.2 的结论：官方 DLL + 自编壳 + 自建前端。
+依据：`mapped-gui-comparison-2026-10-19T17-27-58.csv`、`compare_mapped_gui.py` 和同捕获 GUI 导出文件。
 
-![pysdp WebUI 界面（截图内容待复核）](pysdp.webp)
+### 3.4 为什么还不能宣布性能验收完成
 
-## 5 路线二：新版 Qualcomm Profiler 激活到消费机
+验收目标是**同场景多轮，主要指标相对 GUI 的误差 ≤10%**。现在完成的是其中的“同捕获导出一致性”，还缺多轮 GUI 基准和重复采集的统计。
 
-### 5.1 背景与两个根因
+此前两个独立捕获的结构匹配比较中，有一个 ALU 对照项差异约 18.45%。后续发现同参数 Draw 大量重复，绘制顺序也会变化，原先的跨帧配对不能证明唯一对应。因此既不能用它判定后端必然算错，也不能因为新的同捕获结果一致就宣布该跨轮问题消失。
 
-高通新一代桌面工具 **Qualcomm Profiler**（官方用户指南文档号 80-54323-2，[在线版](https://docs.qualcomm.com/doc/80-54323-2)）需要设备端跑 `qmonitor-grpc-server`（gRPC 62472）才能连。官方文档只支持 LA 厂商 build，消费机上跑不起来，卡在两个运行时问题——都用反汇编 + 实测定过性，不是猜的：
+后续需要固定场景、记录采集条件、取得多轮 GUI 与 CLI 数据，先确认可比的 Draw / 分组，再报告差异。不用“数值接近”代替归属正确，也不把单帧一致冒充多轮稳定。
 
-1. **`ASharedMemory_create` 返回 ashmem fd，不支持 `ftruncate`（errno 22）**：`QOsal::shm_open` 整函数只有两条指令（`mov w1,#0x8` → `b ASharedMemory_create`），后续 `QIMonitorNamedMutex::init` 对它 `ftruncate`。LA 开发机返回的是 memfd 所以没事，消费机返回 ashmem 直接 EINVAL。
-2. **`libQualcommProfilerCore.so` 硬编码 `/vendor/qprof/...` 路径**：核心不读 `QMONITOR_FRONTEND_LIB_PATH` 环境变量，只认 `/vendor/qprof`。
+## 4 官方设备侧 sdpcli：定位推进了，仍不是可靠替代
 
-### 5.2 解法与踩坑（消费机 root）
+这一节说的是高通设备侧 `sdpcli`，不是上一节已对齐的经典 Snapshot 后端。
 
-| 问题 | 解法 | 备注 |
+### 4.1 修正旧文的根因判断
+
+2026.6 的历史现场包含 22 次同类崩溃栈：层的 fence 监控线程进入驱动，最终在 `memmove` 中越界。这个复现事实保留，但旧文将其解释为“已释放页 / UAF / 生命周期竞态”证据不足。
+
+2026-10-19 的动态观测确认了更直接的错误：**第二路异常计数被用于计算拷贝长度，导致从约 1 MiB 的源映射尝试拷贝数 GiB 数据。** 新版调查还观察到 reset 前后第二路旧计数保留，随后参与超长拷贝。
+
+这证明了错误长度与越界路径，尚未解释异常计数为何出现、为何没有被合法数据覆盖。UAF、同步竞态、格式或协议问题仍不能写成确定根因。时间戳链的符号差异也只是历史调查线索。
+
+经典路径与官方 CLI 路径必须分开评价。vendor 内置层此前未测，旧文“另外两代层都稳”的表述已撤回。
+
+依据：`rea-crash-investigation-20261019.md` 与 `sdpcli-2026.8-investigation-20261019.md`。
+
+### 4.2 2026.8 与绕过候选
+
+| 实验路径 | 实际观察 | 当前判断 |
 |---|---|---|
-| ashmem 不支持 ftruncate | `LD_PRELOAD` 垫片：劫持 `ASharedMemory_create` → 改走 `memfd_create + ftruncate` | 实测错误消失，推进到下一错误 |
-| 硬编码 `/vendor/qprof` | tmpfs + overlay：`lowerdir=/vendor`，upper/work 放 tmpfs（/data 是 FBE 加密的 f2fs，不能当 overlay upperdir） | overlay 内建软链被 SELinux 拦，改为直接写底层 upper 目录再叠第二层 overlay |
-| GUI 的 File Management 缺传输通道 | Magisk 自带 busybox 的 `tcpsvd + ftpd` 起匿名 FTP（chroot /data） | 消费机无 sshd/ftpd，零安装方案；受信 LAN 上够用 |
-| GPU 计数器只有基础几项 | `echo 1 > /sys/class/kgsl/kgsl-3d0/perfcounter` | Adreno 硬件计数器默认受限，需 root 开启（社区佐证：[AGI issue #1113](https://github.com/google/agi/issues/1113)）；重启手机后要重开 |
+| 2026.8 正常启动 | 仍复现同类越界崩溃 | 单纯升级未解决本机问题 |
+| 官方暂停启动 `t s -s vk` | 最小程序及两个 Unity 新进程的多轮采集暂未崩 | 有价值的候选，有限观察不等于长期稳定 |
+| reset 时初始化第二路计数 | 最小程序三轮、Unity 五轮；Unity 约 200 秒观察未复现越界 | 实验修复候选，观察窗口包含采集间隔 |
+| 丢弃异常 stream | 曾取得有限存活结果 | 会损失真实样本，不作为可靠默认方案 |
 
-结果：**qprof server 在消费机上跑通、gRPC 62472 监听成功**，PC `Test-NetConnection` 通过。重启手机即全部还原（tmpfs 蒸发、overlay 消失、server 进程退出），是设计好的安全网；配套了 `qprof_start.sh` / `qprof_restore.bat` / `ftp_restore.bat` 一键重拉。
+初始化实验中仍出现异常 ALU 数值，且尚未闭合“reset → GPU 写入合法非零计数 → 正确收集第二路数据”的证据链。因此这些补丁**没有作为默认采集修复接入工作台**。
 
-> 社区对"root + overlayfs 在非 LA build 上跑官方 server"有讨论但给的多是高危 Magisk 模块法（参考 [mllm issue #215](https://github.com/UbiquitousLearning/mllm/issues/215)）；本文方案全部走运行时 overlay + 惰性文件，无模块、无自启钩子。
+旧文“所有绕过都无效”“必崩”的概括不再成立；同样，新的有限成功也不足以宣称根治。
 
-![Qualcomm Profiler（qprof）GUI 截图 1（内容待复核）](qualcomm-profiler.webp)
+### 4.3 已经拿到数据，不代表它可以用于性能判断
 
-![Qualcomm Profiler（qprof）GUI 截图 2（内容待复核）](qualcomm-profiler1.webp)
+本轮已保存官方 CLI 的文本和 JSON 数据。一次完整 JSON 导出约 59.6 MB，包含 9471 个 Surface，但其中 ALU 仍有大于 100 的异常值。它可用于排查数据来源，不能当作已经与 GUI 对齐的那份结果。
 
-### 5.3 结论：弃用（作为"此路不通"记录）
+还定位到 JSON 追加路径的重复遍历开销，准备过加速候选；原始进程在注入前完成导出，**加速候选没有真机验证，也没有部署**。
 
-跑通 ≠ 可用：qprof 是另一套官方优先的备选，接入它本想看它能不能拿到比 SDP GUI 更好的指标，但**消费机上可用 GPU 指标受限（只有基础几项，硬件计数器被 kgsl 限制）**，不足以支撑逐 DC / 计数器级分析。因此**方向弃用**，保留激活路径与踩坑记录——价值在于把"换新版官方 GUI"这个选项从决策树上永久删除，后续不必再为它投入。
+实时采样仍是独立用途。旧版实测的 127 项指标、Trace 清单和编号都应绑定版本与设备；2026.8 的 Wave Occupancy 编号已经变化，不能跨版本只按数字 ID 套用。
 
-## 6 路线三：官方 sdpcli 探索 → Vulkan trace 层崩溃调查
+## 5 桌面工具与文件归属
 
-### 6.1 sdpcli 与探索器
+### 5.1 使用入口确定为 SdpWorkbench
 
-官方新一代设备侧 CLI **sdpcli**（随 SnapdragonProfilerCLI 的 Android Core 包 2026.6 发布，本机留存二进制 + 层 APK + Doxygen 文档）提供 `r l/r c`（实时采样）、`t l/t s/t c`（trace）与 Perfetto 导出。为了好用，先用 Python 把它封装成带 GUI 的 **SdpCliExplorer**（指标树勾选即采、trace 值填回树、RDC 风格日志），并逐项实测能力边界：
+工作台已有连接、启动、截帧、产物索引、历史会话、逐 Draw 详情、Marker 和 API 时间线等界面能力。当前修复版后端也已部署到其默认路径，但还需完成**新后端 → 分析产物 → 界面显示**的完整验收。
 
-| 能力 | 实测 |
+日常目标流程是：**打开工作台 → 选设备和应用 → 到目标场景截帧 → 查看结果**。后端启动、文件落点和历史载入应由工具处理，而不是要求用户在命令行、网页和多个实验目录间切换。
+
+[pysdp](https://github.com/mysheng8/pysdp) 是另一个已有的 Python / WebUI 平台。本轮不采用其网页入口，误接 WebUI 的启动改动已撤回；已验证的共用后端更新保留。
+
+![调研期 pysdp WebUI，本轮不作为桌面工具入口](pysdp.webp)
+
+### 5.2 文件已按用途归位
+
+以下路径相对于本地工具仓库根目录；它们不是博客线上下载链接。
+
+| 位置 | 归属 |
 |---|---|
-| `r l` / `r c` 实时采样 | ✅ 127 指标、范围语法、CSV 输出；走驱动硬件计数器，不经 Vulkan 层 |
-| `t l` / `t s` / `t c` | ✅ 机制通（59 渲染指标；trace 能采到 surface） |
-| `t c -o` → Perfetto JSON | ⚠️ 结构正常但内容常空——因为被测应用被层带崩 |
-| 无逐 DC / DC 级 shader | ⚠️ 边界：逐 DC 分析走 A 线（经典层链路，自编 SDPCLI） |
+| `ToolsPlay/SdpWorkbench/` | 日常桌面前端 |
+| `ToolsPlay/SdpWorkbench/_generate/workspace/` | 工作台日常捕获、分析与历史 |
+| `AndroidProfile/SDPCLI_PY/SDPCLI/Release/` | 当前部署的自编后端 |
+| `AndroidProfile/SDPCLI_PY/SDPCLI/runtime/` | 配套运行时资产 |
+| `AndroidProfile/SDPCLI_PY/SDPCLI/_generate/` | 经典截帧证据、回归工程、构建与回滚资料 |
+| `ToolsPlay/SdpCliExplorer/_generate/` | 官方 CLI / REA 调查现场 |
+| `AndroidProfile/SDPCLI_QC/_doc/` | 调查报告与复现实验说明 |
 
-### 6.2 崩溃现象：22 次同栈
+经典实验主要文件已从 Explorer 迁到后端目录，相关路径已更新，实验 C# 源码从生产项目编译中排除。少量文件被进程占用，旧副本暂留原处，新位置已补齐并核对哈希；这部分清理尚未彻底结束。
 
-`t c`（Vulkan trace）启动后 5 s ~ 282 s 内，被测应用进程必死。设备端 tombstone 全量普查（2026-09-02）命中 **22 次完全同栈的层崩溃**，覆盖 Unity 内部测试工程与自研最小 Vulkan 提交器；崩溃线程是注入层 `libVkLayer_ADRENO_qprofiler.so`（2026.6.0，BuildId `dd594679…`）的 fence 监控线程 `QPrf/VkFencePl`：
+## 6 qprof 路线保留为历史研究
 
-```text
-#00 libc.so        __memmove_aarch64_nt+676        ← SIGSEGV，fault 是 4K 对齐高位、每次不同
-#01 vulkan.adreno.so  匿名驱动函数（符号剥离）
-#02 libVkLayer_ADRENO_qprofiler.so  CollectOneCmdMonitor+208
-#03 ReturnReadyCmdMonitors+36 → #04 OnCommandBufferCompleted+104
-#05 SendQueueSubmitData+224 → #06 WaitForActiveFences+276 → #07 ThreadFunc+140
-```
+早期在消费机上尝试激活 Qualcomm Profiler 的 `qmonitor-grpc-server`，通过共享内存兼容垫片、运行时路径处理及传输通道配置，取得服务启动与连接结果。这是特定设备和系统组合上的实验，不是通用安装方法。
 
-### 6.3 三代 Vulkan 层对照（关键排除）
+当时可用指标未满足本项目目标，因此本轮优先经典 Snapshot 路线。旧文“从决策树永久删除”过于绝对，应改为**当前不投入**，不能推断所有消费机或后续版本都不可用。
 
-崩溃只发生在 sdpcli 这条新注入路径上；同一设备同一批应用，走另两代层都稳：
+共享内存返回类型、驱动计数器限制等判断也应绑定当时二进制和设备，不能推广为所有 Android 系统的行为。具体过程保留在本地 `PKR110_QualcommProfiler_Plan.md`，本文不再重复未经本轮复测的操作配方。
 
-| 层 | 用途 | 结果 |
+![调研期 Qualcomm Profiler 界面](qualcomm-profiler.webp)
+
+## 7 接下来要做什么，做到哪一步才算完成
+
+| 顺序 | 待完成项 | 验收标准 |
 |---|---|---|
-| 经典 `PROFILER_Trace`（Snapdragon Profiler 8.0 GUI / A 线 SDPCLI） | 日常 trace | ✅ 不崩（实测） |
-| vendor 内置 `ADRENO_qprofiler`（固件自带） | 驱动钩子经典属性路径 | 未测（推测无 2026.6 增量） |
-| **APK 层 `ADRENO_qprofiler` 2026.6.0（sdpcli 注入）** | sdpcli `t c` | ❌ 崩（22 次同栈） |
+| 1 | 完成 SdpWorkbench 新后端接入与操作验收 | 从桌面采集、分析到逐 Draw 显示走通；失败明确提示，不展示旧结果 |
+| 2 | 简化日常操作 | 自动准备后端、保存产物、载入历史，用户无需手动搬文件 |
+| 3 | 多轮 GUI / CLI 对照 | 同场景、明确对应关系、记录条件，主要指标误差 ≤10%；不达标则保留差异与原因 |
+| 4 | 清理被占用的旧副本 | 确认占用释放和新归档完整后清除残留 |
+| 独立研究 | 官方 sdpcli 第二路计数问题 | 证明有效样本被保留、指标正确且可重复，再考虑接入默认流程 |
 
-符号差集显示 2026.6 新层相对经典层加了**时间戳收集链**（`QglQueries`，`OnVkQueueCompleted/OnCommandBufferCompleted` 签名扩了 `unsigned long` 参数，另有 "no timestamp support" 提示串）——正是崩溃链所在区间的改动面。这也是上报高通的头号嫌疑。
+当前状态可以概括为：**后端已从“能导出”推进到“同捕获三项指标与官方 GUI 一致”；接下来要把这份可信结果交付到好用的桌面流程，并补齐多轮稳定性验收。**
 
-### 6.4 触发模型与反汇编定位（含一次自我推翻）
+## 8 证据与更新记录
 
-- **反汇编结论（定稿）**：`CollectOneCmdMonitor` 通过 `blr x8` **合法调用**驱动函数（x8 是有效指针，不是野指针）；崩点在驱动内 `memmove`——它读的源缓冲 `x1 = fault-0x40` 已经失效/越界（缓冲贴页末、拷贝越页到已释放页）。层对 cmd-buffer 记账有三处防御，但对**数据缓冲生命周期零防御**；fence 线程处理循环无锁（唯一 mutex 只包 `UpdateFenceList`）。
-- **早期误判已修正**：先曾推断"触发因子 = 并发 pending fence 数量"（v1 空提交不崩 / v3 四 fence 崩），并据此设计过双会话规避；**2026-09-02 控制实验推翻该模型**——12/16 fence 风暴单会话 118 s+ 零崩。现行**双轨模型**：
+公开项目来源：
 
-| 负载 | 首会话单次 `t c` | 同进程第二次 `t c` |
-|---|---|---|
-| 自研最小 Vulkan 提交器（简单提交） | ✅ 零崩（20+ 次） | ❌ 必崩（5/5 控制实验） |
-| Unity（复杂提交引擎） | ❌ **首会话即崩**（8~42 s） | ❌ |
+- [mysheng8/sdpcli-releases](https://github.com/mysheng8/sdpcli-releases)：第三方 CLI 二进制发布来源，不作为源码开源证明。
+- [mysheng8/pysdp](https://github.com/mysheng8/pysdp)：Python 分析与 WebUI 平台。
 
-统一机制是同一条竞态（层 fence 线程读失效 monitor 缓冲）；Unity 的提交强度首会话就撞窗，简单提交器要靠跨会话状态叠加才撞窗。**与方法论有关的教训**：早期用"双会话 + 重启规避"推断 Unity 也安全是错的——任何复现结论必须先上真实目标复核。
+本篇自有实验结论对应以下本地材料，完整路径记录在 `context.json`；原始捕获未随博客公开，外部读者不能仅靠本文独立复现实验：
 
-### 6.5 最小复现与上报
-
-最小复现不依赖游戏引擎：一个 100 行纯 Vulkan 的 NativeActivity 提交器（`vktest`，无 shader 无 surface 渲染），按"双会话 SOP"即可在 ~40 s 内稳定复现同栈崩溃（已 2/2 验证），完整源码与矩阵计划留在调查档案里。
-
-绕过路径全部试过、均无效：`-m lo` 低开销模式一样崩（fence 线程结构不变）；层无时间戳链开关；sdpcli 二进制硬编码自家层包名（`com.qualcomm.adreno.profilinglayer.` + `am gpu_debug_layers`），换不出层。
-
-交付物状态：
-
-| 件 | 状态 |
+| 材料 | 支撑内容 |
 |---|---|
-| QDN 论坛发布件（崩溃普查 + 复现 + 反汇编证据） | ✅ 已投递 2026-09-02 |
-| Qualcomm 支持门户/邮件崩溃报告（英文） | 草稿（未投） |
-| GitHub issue 草稿 | 草稿（备选渠道） |
+| `sdpcli-alu-analysis-20261019.md` | 指标异常调查、经典后端修复、归档回归及同捕获对齐 |
+| `2026-10-19T17-27-58.sdp` + `Export_2026-10-19_17-33-43.csv` | 同捕获 CLI / GUI 原始基准 |
+| `mapped-gui-comparison-2026-10-19T17-27-58.csv` | 126 项数值比较 |
+| `rea-crash-investigation-20261019.md` | 2026.6 动态证据与旧 UAF 判断的更正 |
+| `sdpcli-2026.8-investigation-20261019.md` | 新版崩溃、暂停启动、初始化候选与局限 |
+| SdpWorkbench 源码、README 与后端源码 | 当前桌面能力、默认入口和实现范围 |
+| 后端 `_generate/README.md` | 实验文件迁移与占用残留清单 |
 
-## 7 最终工作流建议
+2026-09-03 初稿保留了调研起点；2026-10-19 更新撤回未经证实的 UAF / 必崩 / 永久弃用结论，补入工作台现状、数据修复、同捕获对齐结果和未完成验收。
 
-调研收敛出的方向（截至 2026-09）：
-
-1. **主线：官方 DLL + 自编壳 + 自建前端**——官方 GUI 只是官方托管 API 的一个壳，mysheng8 只是"官方 DLL + 自写壳"；因此自建工具直接引用官方安装目录的 `SDPClientFramework/SDPCoreWrapper/SDPCore.dll`（手机侧保持全官方、零改动），把截帧/提取/导出流程按自己的习惯编排，摆脱 GUI 的迭代慢与不稳定；
-2. **Vulkan/GLES 截帧（现状可用）**：经典 `PROFILER_Trace` 层链路（A 线）稳定不崩——日常 trace 用它；自编 SDPCLI（修复版）已验证可作为引擎；
-3. **无侵入实时采样**：官方设备侧 `sdpcli r l / r c`（或 SdpCliExplorer GUI）——不经 Vulkan 层、127 项指标，稳定可用，作为 trace 之外的第二数据通道保留；
-4. **不要走的路（均有实证）**：官方 SDP GUI（慢/崩/迭代慢）；qprof 消费机路径（指标受限，已弃）；官方 sdpcli 的 Vulkan trace（2026.6 注入层 22 次同栈崩溃，等高通修复，已投 QDN）；
-5. **桌面 GUI 与 sdpcli 互斥**：Snapdragon Profiler 连着设备时，sdpcli trace 会 `Failed to connect to the application`（`debug.vulkan.profiler.*` 属性占用驱动钩子）——自建链路与官方 GUI 不要同时连。
-
-## 8 参考
-
-- [Snapdragon Profiler — Qualcomm 官方产品页](https://www.qualcomm.com/developer/software/snapdragon-profiler)
-- [Snapdragon Profiler — Qualcomm Software Center 下载页](https://softwarecenter.qualcomm.com/catalog/item/Snapdragon_Profiler)
-- [Qualcomm Profiler — Qualcomm Software Center 下载页](https://softwarecenter.qualcomm.com/catalog/item/Qualcomm_Profiler)
-- [Qualcomm Profiler 用户指南（文档号 80-54323-2）](https://docs.qualcomm.com/doc/80-54323-2)
-- [Snapdragon Profiler CLI Android（sdpcli）— Qualcomm Software Center 下载页](https://softwarecenter.qualcomm.com/catalog/item/SnapdragonProfilerCLIAndroid?type=Tool)
-- [pysdp — GitHub（调研期实验平台，DuckDB 数据层思路已吸收）](https://github.com/mysheng8/pysdp)
-- [mysheng8/sdpcli-releases — 第三方 Snapdragon Profiler CLI 发布仓库](https://github.com/mysheng8/sdpcli-releases)
-- [google/agi issue #1113 — Qualcomm GPU 计数器需 root 的社区佐证](https://github.com/google/agi/issues/1113)
-- [UbiquitousLearning/mllm issue #215 — root/overlayfs 相关社区讨论](https://github.com/UbiquitousLearning/mllm/issues/215)
+> **核查范围**：本次依据本地源码和实验记录修订当前进度，并复核上游仓库定位；未重跑手机采集，未将有限实验写成通用稳定性保证。
