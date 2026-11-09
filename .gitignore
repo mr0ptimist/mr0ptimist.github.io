@@ -11,3 +11,5 @@ content/PRIVATE.md
 config/development/
 .idea/
 .DS_Store
+reference/DirectXTK12/
+reference/DirectXTex/
